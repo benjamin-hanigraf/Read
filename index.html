@@ -2,20 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Read</title>
     <meta name="description" content="A daily Bible reading plan." />
     <meta name="theme-color" content="#000000" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Read" />
+    <link rel="preload" href="/data/en.json" as="fetch" crossorigin />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <style>
       html, body, #root { margin: 0; background: #000; }
-      html { color-scheme: dark; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
-      * { touch-action: manipulation; }
+      html { color-scheme: dark; -webkit-text-size-adjust: 100%; }
+      * { touch-action: pan-x pan-y; }  /* scrolling and swiping only: no pinch or double-tap zoom */
     </style>
   </head>
   <body>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useReducer } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useReducer } from "react";
 
 import { ARTS } from "./data/arts.js";
 import { TA_NAMES } from "./data/names.js";
@@ -15,7 +15,7 @@ const ALL = flat(BOOKS);
 const nm = (b, lang) => (lang === "ta" ? TA_NAMES[BOOKS.findIndex(([x]) => x === b)] : b);
 const disp = (b, lang) => (lang === "ta" ? nm(b, "ta") : b === "Psalm" ? "Psalms" : b);
 const label = (c, lang) => { if (!c.length) return "Rest"; const [b1, n1] = c[0], [b2, n2] = c[c.length - 1]; const f = b => nm(b, lang); return b1 === b2 ? (n1 === n2 ? `${f(b1)} ${n1}` : `${f(b1)} ${n1}–${n2}`) : `${f(b1)} ${n1} – ${f(b2)} ${n2}`; };
-import { CH, VERSES } from "./data/bible.js";
+import { CH, VERSES, useBible, bibleReady, bibleFailed, taIn, taOut } from "./data/bible.js";
 const LANGS = ["en", "ta", "both"];
 const LANG_LABEL = { en: "A", ta: "அ", both: "Aஅ" };
 const taFont = "'Noto Serif Tamil', 'Noto Sans Tamil', 'Tamil MN', 'Tamil Sangam MN', 'Nirmala UI', 'Latha', serif";
@@ -69,7 +69,11 @@ const dayItems = n => isCatchUp(n) || readIdx(n) >= R ? [] : [0, 1, 2].map(t => 
 const C = { bg: "#000", card: "#1c1c1e", card2: "#2c2c2e", text: "#f5f5f7", sub: "#8e8e93", line: "#38383a", blue: "#0a84ff" };
 const RAD = 14;
 const cl = (min, v, max) => `clamp(${min}px, ${v}dvh, ${max}px)`;
-const ROWH = cl(50, 6.6, 60);
+const ROWH = cl(56, 7.4, 66);
+const ARTH = cl(88, 16, 150);
+const NAV = "calc(61px + env(safe-area-inset-bottom, 0px))";  // height of the bottom bar
+const NAVPAD = "calc(61px + env(safe-area-inset-bottom, 0px) + 24px)";  // bottom padding that keeps content clear of it
+const TOP = "env(safe-area-inset-top, 0px)";
 const backBtn = { display: "flex", alignItems: "center", background: "none", border: "none", color: C.blue, fontSize: 22, padding: "12px 16px", cursor: "pointer" };
 const sans = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif";
 const serif = "ui-serif, 'New York', Georgia, serif";
@@ -96,6 +100,7 @@ const okSize = v => typeof v === "number" && v >= 16 && v <= 28;
 const okLang = v => LANGS.includes(v);
 const okFavs = v => Array.isArray(v) && v.every(k => typeof k === "string" && /^.+ \d+:\d+$/.test(k));
 const okHls = v => okKeys(v, /^.+ \d+:\d+$/);
+const longDate = d => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" }).formatToParts(d).map(x => [x.type, x.value])); return `${p.weekday}, ${p.day} ${p.month}`; };
 const iso = d => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 6e4); return z.toISOString().slice(0, 10); };
 const dayDiff = (a, b) => Math.round((new Date(a + "T00:00") - new Date(b + "T00:00")) / 864e5);
 const addDays = (s, k) => { const d = new Date(s + "T00:00"); d.setDate(d.getDate() + k); return d; };
@@ -106,7 +111,7 @@ const Pill = ({ children, onClick, disabled, ghost }) => (
 
 const Check = ({ on, onClick }) => (
   <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label="Mark as read" aria-pressed={on} style={{ background: "none", border: "none", padding: 11, margin: -11, cursor: "pointer", flexShrink: 0, display: "flex" }}>
-    <span style={{ width: 22, height: 22, borderRadius: 11, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", border: on ? "none" : `1.5px solid ${C.line}`, background: on ? C.blue : "transparent", color: "#fff", fontSize: 13, fontWeight: 700, transition: "background .2s" }}>{on ? "✓" : ""}</span>
+    <span style={{ width: 18, height: 18, borderRadius: 9, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", border: on ? "none" : `1.5px solid ${C.line}`, background: on ? C.blue : "transparent", color: "#fff", fontSize: 11, fontWeight: 700, transition: "background .2s" }}>{on ? "✓" : ""}</span>
   </button>
 );
 
@@ -125,7 +130,7 @@ const DayRing = ({ frac, size, sw = 3, onClick, style, children }) => {
 function Art({ i, onTap }) {
   const a = ARTS[i];
   return (
-    <div onClick={onTap} style={{ flex: 1, minHeight: 120, position: "relative" }} aria-hidden="true">
+    <div onClick={onTap} style={{ flex: "0 0 auto", height: ARTH, position: "relative" }} aria-hidden="true">
       <svg key={i} viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", animation: "wFade .4s ease" }}>
         {a.els.map(([d, o], k) => <path key={k} d={d} opacity={o} fill="none" stroke={C.blue} strokeWidth="1.2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />)}
       </svg>
@@ -154,6 +159,7 @@ const LangBtn = ({ lang, setLang }) => (
 );
 
 function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, favs, hls, toggleFav, toggleHl }) {
+  useBible();
   const ref = useRef(null);
   const browse = !item.key;
   const idx = ALL.findIndex(([b, n]) => b === item.ch[0][0] && n === item.ch[0][1]);
@@ -234,8 +240,8 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   const rk = menu ? rangeKeys(menu) : [];
   return (
     <div ref={ref} onTouchStart={onTS} onTouchEnd={onTE} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 10, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
-      <div data-hdr="1" style={{ position: "sticky", top: 0, zIndex: 2, background: "rgba(0,0,0,.82)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderBottom: `1px solid ${C.line}` }}>
-        <div style={{ maxWidth: 430, margin: "0 auto", padding: "10px 20px", display: "flex", alignItems: "center", gap: 8 }}>
+      <div data-hdr="1" style={{ position: "sticky", top: 0, zIndex: 2, background: "#000", borderBottom: `1px solid ${C.line}` }}>
+        <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(10px + ${TOP}) 20px 10px`, display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
             <button onClick={close} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(17)} /></button>
             <div style={{ fontFamily: sans, fontSize: 17, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label(item.ch, lang)}</div>
@@ -247,13 +253,13 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
           </div>
         </div>
       </div>
-      <div key={item.ch.map(c => c.join(" ")).join("|")} style={{ maxWidth: 430, margin: "0 auto", padding: browse ? "40px 28px 80px" : "40px 28px 140px", animation: dir ? `${dir > 0 ? "wInR" : "wInL"} .3s cubic-bezier(.2,.8,.2,1)` : "none" }}>
+      <div key={item.ch.map(c => c.join(" ")).join("|")} style={{ maxWidth: 430, margin: "0 auto", padding: browse ? "40px 28px calc(80px + env(safe-area-inset-bottom, 0px))" : "40px 28px calc(40px + env(safe-area-inset-bottom, 0px))", animation: dir ? `${dir > 0 ? "wInR" : "wInL"} .3s cubic-bezier(.2,.8,.2,1)` : "none" }}>
         {item.ch.map(([b, n]) => {
           const k = b + " " + n, d = CH[k];
           const vs = d ? [...new Set([...(showEN ? Object.keys(d.en) : []), ...(showTA ? Object.keys(d.ta) : [])])].map(Number).sort((x, y) => x - y) : [];
           return (
             <section key={k} style={{ marginBottom: 48 }}>
-              {item.ch.length > 1 && <div style={{ fontFamily: sans, color: C.sub, fontSize: 15, marginBottom: 14 }}>{nm(b, lang)} {n}</div>}
+              {item.ch.length > 1 && <div style={{ fontFamily: sans, color: C.blue, fontSize: 17, fontWeight: 600, marginBottom: 14 }}>{nm(b, lang)} {n}</div>}
               <div style={{ fontSize: size, lineHeight: 1.65, color: C.text }}>
                 {vs.length ? vs.map(v => {
                   const vk = `${b} ${n}:${v}`, sel = menu && menu.ck === k && v >= Math.min(menu.a, menu.to) && v <= Math.max(menu.a, menu.to);
@@ -266,17 +272,13 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
                       </div>
                     </div>
                   );
-                }) : <div style={{ color: C.sub, fontFamily: sans, fontSize: 15 }}>The full text for this chapter loads from your Bible files in the PWA build.</div>}
+                }) : <div style={{ color: C.sub, fontFamily: sans, fontSize: 15 }}>{bibleReady(lang) ? "The full text for this chapter loads from your Bible files in the PWA build." : bibleFailed() ? "Couldn't load the Bible. Check your connection." : "Loading…"}</div>}
               </div>
             </section>
           );
         })}
+        {!browse && <Pill onClick={advance}>{last ? "Done" : "Next"}</Pill>}
       </div>
-      {!browse && (
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "16px 28px 32px", background: "linear-gradient(transparent, #000 40%)" }}>
-          <div style={{ maxWidth: 374, margin: "0 auto" }}><Pill onClick={advance}>{last ? "Done" : "Next"}</Pill></div>
-        </div>
-      )}
       {menu && (
         <div style={{ position: "fixed", inset: 0, zIndex: 30, pointerEvents: "none" }}>
           {menu.pts.map(([x, y], i) => {
@@ -285,12 +287,13 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
           })}
         </div>
       )}
-      {toast && <div style={{ position: "fixed", left: 0, right: 0, bottom: browse ? 40 : 108, display: "flex", justifyContent: "center", zIndex: 31, pointerEvents: "none" }}><div style={{ background: C.card2, color: C.text, fontSize: 14, fontFamily: sans, padding: "9px 16px", borderRadius: RAD }}>{toast}</div></div>}
+      {toast && <div style={{ position: "fixed", left: 0, right: 0, bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", display: "flex", justifyContent: "center", zIndex: 31, pointerEvents: "none" }}><div style={{ background: C.card2, color: C.text, fontSize: 14, fontFamily: sans, padding: "9px 16px", borderRadius: RAD }}>{toast}</div></div>}
     </div>
   );
 }
 
 function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
+  const ver = useBible();
   const [q, setQ] = useState("");
   const [book, setBook] = useState(null);
   const [showFavs, setShowFavs] = useState(false);
@@ -301,19 +304,20 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   let target = null;
   if (m) { const k = norm(m[1]); const f = BOOKS.find(([b]) => norm(b).startsWith(k) || k === norm(b) + "s"); if (f && +m[2] >= 1 && +m[2] <= f[1]) target = { b: f[0], n: +m[2], v: m[3] ? +m[3] : undefined }; }
   const sl = s.toLowerCase();
-  const hits = useMemo(() => {
-    const o = [];
-    if (s.length < 2 || target) return o;
-    for (const x of VERSES) { if ((lang !== "ta" && x.lo.includes(sl)) || (lang !== "en" && x.ta.includes(s))) { o.push(x); if (o.length === 60) break; } }
-    return o;
-  }, [s, !!target, lang]);
+  const { hits, total } = useMemo(() => {
+    const o = []; let t = 0;
+    if (s.length < 2 || target) return { hits: o, total: 0 };
+    const st = taIn(s);
+    for (const x of VERSES) { if ((lang !== "ta" && x.lo.includes(sl)) || (lang !== "en" && x.ta.includes(st))) { t++; if (o.length < 60) o.push({ ...x, ta: taOut(x.ta) }); } }
+    return { hits: o, total: t };
+  }, [s, !!target, lang, ver]);
   const mark = tx => tx.split(new RegExp("(" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "i")).map((p, i) => i % 2 ? <mark key={i} style={{ background: "rgba(10,132,255,.35)", color: C.text, borderRadius: 3 }}>{p}</mark> : p);
   const lines = (x, hl) => [lang !== "ta" && x.en ? ["en", x.en] : null, lang !== "en" && x.ta ? ["ta", x.ta] : null].filter(Boolean).map(([l, tx]) => <div key={l} lang={l} style={{ fontFamily: l === "ta" ? taFont : serif, fontSize: l === "ta" ? 15 : 16, lineHeight: 1.55, marginTop: l === "ta" && lang === "both" ? 4 : 0, color: l === "ta" && lang === "both" ? "#c7c7cc" : C.text }}>{hl ? mark(tx) : tx}</div>);
   const group = (title, list, off) => (
     <div style={{ marginBottom: 28 }}>
       <div style={{ color: C.blue, fontSize: lang === "ta" ? 17 : 13, fontWeight: 600, letterSpacing: lang === "ta" ? 0 : 0.6, textTransform: "uppercase", margin: "0 8px 8px" }}>{title}</div>
       <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
-        {list.map(([b], i) => <div key={b} onClick={() => setBook(b)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 52, boxSizing: "border-box", padding: "0 20px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer", fontSize: 17 }}><span>{disp(b, lang)}</span><span style={{ color: C.sub, display: "flex", alignItems: "center", gap: 10 }}>{lang === "both" && <span style={{ fontSize: 15 }}>{TA_NAMES[off + i]}</span>}<Chev /></span></div>)}
+        {list.map(([b, cnt], i) => <div key={b} onClick={() => (cnt === 1 ? go({ ch: [[b, 1]] }) : setBook(b))} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 52, boxSizing: "border-box", padding: "0 20px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer", fontSize: 17 }}><span>{disp(b, lang)}</span><span style={{ color: C.sub, display: "flex", alignItems: "center", gap: 10 }}>{lang === "both" && <span style={{ fontSize: 15 }}>{TA_NAMES[off + i]}</span>}<Chev /></span></div>)}
       </div>
     </div>
   );
@@ -337,7 +341,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
               <button onClick={e => { e.stopPropagation(); toggleFav(k); }} aria-label="Remove favourite" style={{ background: "none", border: "none", color: C.blue, padding: 8, display: "flex", cursor: "pointer" }}>{Ico.heart(true)}</button>
             </div>); })}
         </div>
-      ) : <div style={{ color: C.sub, textAlign: "center", padding: "40px 20px", lineHeight: 1.5 }}>Long-press a verse and slide to the heart to save it here.</div>}
+      ) : <div style={{ color: C.sub, textAlign: "center", padding: "40px 20px", lineHeight: 1.5 }}>Long-press a verse, then tap the heart to save it here.</div>}
     </div>
   );
 
@@ -346,7 +350,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
       <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
           <button onClick={() => setBook(null)} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(28)} /></button>
-          <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0 }}>{disp(book, lang)}</h2>
+          <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0, color: C.blue }}>{disp(book, lang)}</h2>
         </div>
         <LangBtn lang={lang} setLang={setLang} />
       </div>
@@ -368,6 +372,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search, or go to John 3:16" style={{ display: "block", width: "100%", boxSizing: "border-box", background: C.card2, border: "none", borderRadius: RAD, height: 52, padding: "0 44px 0 16px", color: C.text, fontSize: 17, fontFamily: sans, outline: "none" }} />
         {q && <button onClick={() => setQ("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", cursor: "pointer", color: C.sub }}><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="currentColor" /><path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke="#2c2c2e" strokeWidth="1.8" strokeLinecap="round" /></svg></button>}
       </div>
+      {total > 0 && <div style={{ color: C.sub, fontSize: 12, margin: "-10px 4px 14px" }}>{total === 1 ? "1 result" : `${total} results`}{total > hits.length ? ` · showing first ${hits.length}` : ""}</div>}
       {target ? (
         <div onClick={() => go({ ch: [[target.b, target.n]], hl: target.v })} style={{ background: C.card, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 20px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: 17 }}>
           <span style={{ color: C.blue, fontWeight: 600 }}>Go to {disp(target.b, lang)} {target.n}{target.v ? ":" + target.v : ""}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
@@ -384,7 +389,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
       ) : book ? (
         <div>
           {back()}
-          <h2 style={{ fontSize: 28, fontWeight: 700, margin: "0 0 20px" }}>{disp(book, lang)}</h2>
+          <h2 style={{ fontSize: 28, fontWeight: 700, margin: "0 0 20px", color: C.blue }}>{disp(book, lang)}</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
             {Array.from({ length: BOOKS.find(([b]) => b === book)[1] }, (_, i) => <button key={i} onClick={() => go({ ch: [[book, i + 1]] })} style={{ aspectRatio: "1", borderRadius: RAD, border: "none", background: C.card, color: C.text, fontSize: 17, fontFamily: sans, cursor: "pointer" }}>{i + 1}</button>)}
           </div>
@@ -399,7 +404,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     </div>
     {(favsView || bookView) && (
       <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: 0, zIndex: 4, background: C.bg, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
-        <div style={{ maxWidth: 430, margin: "0 auto", padding: "28px 24px 96px" }}>{showFavs ? favsView : bookView}</div>
+        <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(28px + ${TOP}) 24px ${NAVPAD}` }}>{showFavs ? favsView : bookView}</div>
       </div>
     )}
     </>
@@ -444,7 +449,7 @@ function Calendar({ start, today, view, status, pick, close, mark }) {
   const arrow = { background: "none", border: "none", color: C.blue, fontSize: 26, cursor: "pointer", padding: "6px 10px", display: "inline-flex", alignItems: "center", fontSize: 22 };
   return (
     <div ref={rootRef} onTouchStart={e => { sw.current = [e.touches[0].clientX, e.touches[0].clientY]; }} onTouchEnd={e => { const s0 = sw.current; sw.current = null; if (!s0 || s0[0] < 28 || ps.current.on || ps.current.quiet) return; const dx = e.changedTouches[0].clientX - s0[0], dy = e.changedTouches[0].clientY - s0[1]; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1); }} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 20, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
-      <div style={{ maxWidth: 430, margin: "0 auto", padding: "28px 24px 60px" }}>
+      <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(28px + ${TOP}) 24px calc(60px + env(safe-area-inset-bottom, 0px))` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "baseline", minWidth: 0 }}>
           <button onClick={close} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(30)} /></button>
@@ -467,6 +472,37 @@ function Calendar({ start, today, view, status, pick, close, mark }) {
   );
 }
 
+// The week row: drag left/right and the neighbouring weeks slide in following the finger.
+function WeekStrip({ off, setOff, build, can, render }) {
+  const box = useRef(null), track = useRef(null), g = useRef(null), lastDrag = useRef(0), busy = useRef(false);
+  const put = (x, anim) => { const t = track.current; if (!t) return; t.style.transition = anim ? "transform .28s cubic-bezier(.2,.8,.2,1)" : "none"; t.style.transform = `translateX(calc(-33.3333% + ${x}px))`; };
+  useLayoutEffect(() => { put(0, false); busy.current = false; }, [off]);
+  const down = e => { if (busy.current || (e.pointerType === "mouse" && e.button !== 0)) return; g.current = { x: e.clientX, y: e.clientY, t: Date.now(), on: false, id: e.pointerId, dx: 0 }; };
+  const move = e => {
+    const q = g.current; if (!q || e.pointerId !== q.id) return;
+    const dx = e.clientX - q.x, dy = e.clientY - q.y;
+    if (!q.on) { if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return; q.on = true; try { box.current.setPointerCapture(e.pointerId); } catch {} }
+    q.dx = dx; put(can(off + (dx < 0 ? 1 : -1)) ? dx : dx * 0.25, false);
+  };
+  const up = () => {
+    const q = g.current; g.current = null; if (!q || !q.on) return;
+    lastDrag.current = Date.now();
+    const w = box.current.clientWidth, dir = q.dx < 0 ? 1 : -1, fast = Math.abs(q.dx) / Math.max(1, Date.now() - q.t) > 0.5;
+    if (can(off + dir) && (Math.abs(q.dx) > w * 0.25 || fast)) { busy.current = true; put(-dir * w, true); setTimeout(() => setOff(o => o + dir), 280); }
+    else put(0, true);
+  };
+  const cancel = () => { if (g.current && g.current.on) put(0, true); g.current = null; };
+  return (
+    <div ref={box} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}
+      onClickCapture={e => { if (Date.now() - lastDrag.current < 400) { e.stopPropagation(); e.preventDefault(); } }}
+      style={{ overflow: "hidden", touchAction: "pan-y" }}>
+      <div ref={track} style={{ display: "flex", width: "300%", transform: "translateX(calc(-33.3333% + 0px))" }}>
+        {[off - 1, off, off + 1].map(o => <div key={o} style={{ width: "33.3333%", flexShrink: 0, display: "flex" }}>{render(build(o))}</div>)}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const today = iso(new Date());
   const [start, setStart] = useState(() => store.get("start", null, okStart));
@@ -481,6 +517,7 @@ export default function App() {
   const [hls, setHls] = useState(() => store.get("hls", {}, okHls));
   const [cal, setCal] = useState(false);
   const [artTap, setArtTap] = useState(0);
+  const [weekOff, setWeekOff] = useState(0);  // weeks away from the current one; goes back to 0 when you return to the app
   const [, refresh] = useReducer(x => x + 1, 0);
   useEffect(() => {
     let day = iso(new Date());
@@ -490,8 +527,9 @@ export default function App() {
       day = t; refresh();
     };
     const iv = setInterval(sync, 60000);
-    window.addEventListener("resize", sync); window.addEventListener("focus", sync); document.addEventListener("visibilitychange", sync);
-    return () => { clearInterval(iv); window.removeEventListener("resize", sync); window.removeEventListener("focus", sync); document.removeEventListener("visibilitychange", sync); };
+    const vis = () => { if (!document.hidden) setWeekOff(0); sync(); };
+    window.addEventListener("resize", sync); window.addEventListener("focus", sync); document.addEventListener("visibilitychange", vis);
+    return () => { clearInterval(iv); window.removeEventListener("resize", sync); window.removeEventListener("focus", sync); document.removeEventListener("visibilitychange", vis); };
   }, [start]);
   useEffect(() => { store.set("start", start); }, [start]);
   useEffect(() => { store.set("done", done); }, [done]);
@@ -499,12 +537,14 @@ export default function App() {
   useEffect(() => { store.set("lang", lang); }, [lang]);
   useEffect(() => { store.set("favs", favs); }, [favs]);
   useEffect(() => { store.set("hls", hls); }, [hls]);
+  // no rubber-banding on the Today page (it never scrolls); the Bible list keeps the normal spring
+  useEffect(() => { document.documentElement.style.overscrollBehavior = tab === "today" ? "none" : ""; }, [tab]);
   const toggleFav = k => setFavs(f => (f.includes(k) ? f.filter(x => x !== k) : [...f, k]));
   const markDay = (dn, on) => setDone(d => { const o = { ...d }; dayItems(dn).forEach(i => { if (on) o[i.key] = true; else delete o[i.key]; }); return o; });
   const toggleHl = k => setHls(h => { const o = { ...h }; if (o[k]) delete o[k]; else o[k] = 1; return o; });
   const toggle = k => setDone(d => ({ ...d, [k]: !d[k] }));
 
-  const shell = { maxWidth: 430, margin: "0 auto", minHeight: "100vh", background: C.bg, color: C.text, fontFamily: sans, padding: "0 24px 96px", boxSizing: "border-box", overflowX: "hidden" };
+  const shell = { maxWidth: 430, margin: "0 auto", minHeight: "100vh", background: C.bg, color: C.text, fontFamily: sans, padding: `${TOP} 24px ${NAVPAD}`, boxSizing: "border-box", overflowX: "hidden" };
 
   if (!start) return (
     <div style={{ ...shell, display: "flex", flexDirection: "column", justifyContent: "center", gap: 48, paddingBottom: 48 }}>
@@ -525,7 +565,7 @@ export default function App() {
   let items = dayItems(n);
   const finished = items.filter(i => done[i.key]).length;
   const next = items.find(i => !done[i.key]);
-  const dateStr = addDays(start, n).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  const dateStr = longDate(addDays(start, n));
 
   const seen = {};
   Object.keys(done).filter(k => done[k]).forEach(k => { const [d, tr] = k.split(":").map(Number); chaptersFor(tr, readIdx(d)).forEach(([b, c]) => { (seen[b] = seen[b] || new Set()).add(c); }); });
@@ -540,13 +580,24 @@ export default function App() {
   const rs = Math.min(40, Math.max(32, Math.round(window.innerHeight * 0.043)));
   const artI = (((dayDiff(today, "2026-01-01") + artTap) % ARTS.length) + ARTS.length) % ARTS.length;
   const base = new Date(today + "T00:00"), dow = base.getDay();
-  const week = Array.from({ length: 7 }, (_, i) => { const dt = new Date(base); dt.setDate(dt.getDate() + i - dow); const ds = iso(dt), dn = dayDiff(ds, start), inn = dn >= 0 && dn < planLen(); return { d: dt.getDate(), s: inn ? dayStatus(dn) : "out", inn, today: ds === today, dn, frac: inn ? prog(dn) : 0 }; });
+  const weekAt = o => Array.from({ length: 7 }, (_, i) => { const dt = new Date(base); dt.setDate(dt.getDate() + i - dow + 7 * o); const ds = iso(dt), dn = dayDiff(ds, start), inn = dn >= 0 && dn < planLen(); return { d: dt.getDate(), s: inn ? dayStatus(dn) : "out", inn, today: ds === today, dn, frac: inn ? prog(dn) : 0 }; });
+  const canWeek = o => { if (o === 0) return true; const dn0 = dayDiff(iso(addDays(today, 7 * o - dow)), start); return dn0 + 6 >= 0 && dn0 < planLen(); };
+  const renderWeek = cells => cells.map((c, i) => (
+    <div key={i} style={{ flex: 1, textAlign: "center" }}>
+      <div style={{ color: C.sub, fontSize: 11, marginBottom: 6 }}>{"SMTWTFS"[i]}</div>
+      {c.inn ? (
+        <DayRing frac={c.frac} size={rs} onClick={e => { e.stopPropagation(); setView(c.dn); }} style={{ margin: "0 auto", cursor: "pointer" }}>
+          <div style={{ width: rs - 10, height: rs - 10, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: c.today ? 700 : 500, background: c.today ? C.blue : c.dn === n ? "rgba(255,255,255,.16)" : "transparent", color: c.today ? "#fff" : C.text }}>{c.d}</div>
+        </DayRing>
+      ) : <div style={{ width: rs, height: rs, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#3a3a3c" }}>{c.d}</div>}
+    </div>
+  ));
 
   return (
-    <div style={shell}>
+    <div style={tab === "today" ? { ...shell, height: "100dvh", minHeight: 0, paddingBottom: 0, overflow: "hidden" } : shell}>
       <style>{CSS}</style>
       {tab === "bible" ? <BibleTab go={setOpen} lang={lang} setLang={setLang} favs={favs} toggleFav={toggleFav} active={!open && !cal} /> : (
-        <div style={{ paddingTop: 28, minHeight: "calc(100dvh - 124px)", display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ height: `calc(100dvh - ${NAV} - ${TOP})`, boxSizing: "border-box", paddingTop: 16, display: "flex", flexDirection: "column", gap: cl(14, 2.1, 22), overflow: "hidden" }}>
           <Art i={artI} onTap={() => setArtTap(k => k + 1)} />
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -558,29 +609,20 @@ export default function App() {
               ))}
             </div>
 
-            <div onClick={() => setCal(true)} style={{ background: C.card, borderRadius: RAD, padding: `${cl(10, 1.6, 15)} 8px`, display: "flex", cursor: "pointer" }}>
-              {week.map((c, i) => (
-                <div key={i} style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ color: C.sub, fontSize: 11, marginBottom: 6 }}>{"SMTWTFS"[i]}</div>
-                  {c.inn ? (
-                    <DayRing frac={c.frac} size={rs} onClick={e => { e.stopPropagation(); setView(c.dn); }} style={{ margin: "0 auto", cursor: "pointer" }}>
-                      <div style={{ width: rs - 10, height: rs - 10, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: c.today ? 700 : 500, background: c.today ? C.blue : c.dn === n ? "rgba(255,255,255,.16)" : "transparent", color: c.today ? "#fff" : C.text }}>{c.d}</div>
-                    </DayRing>
-                  ) : <div style={{ width: rs, height: rs, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#3a3a3c" }}>{c.d}</div>}
-                </div>
-              ))}
+            <div onClick={() => setCal(true)} style={{ background: C.card, borderRadius: RAD, padding: `${cl(10, 1.6, 15)} 8px`, cursor: "pointer" }}>
+              <WeekStrip off={weekOff} setOff={setWeekOff} build={weekAt} can={canWeek} render={renderWeek} />
             </div>
           </div>
 
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div>
                 <div style={{ color: C.sub, fontSize: 13, height: 17, marginBottom: 2 }}>{catchUp ? "Catch-up" : ""}</div>
                 <h1 style={{ fontSize: cl(20, 2.9, 26), fontWeight: 700, letterSpacing: -0.5, margin: 0, whiteSpace: "nowrap", lineHeight: 1.2 }}>{dateStr}</h1>
               </div>
             </div>
 
-            <div style={{ height: `calc(3 * ${ROWH})`, overflowY: "auto" }}>
+            <div style={{ height: `calc(3 * ${ROWH})`, overflow: "hidden", flexShrink: 0 }}>
             {items.length ? (
               <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
                 {items.map((it, i) => (
@@ -601,15 +643,16 @@ export default function App() {
             )}
             </div>
 
-            <div style={{ marginTop: 12, visibility: items.length ? "visible" : "hidden" }}><Pill ghost={!next} onClick={() => (next ? setOpen(next) : readAhead())}>{next ? (finished ? "Continue" : "Start") : "Read next portion"}</Pill></div>
+            {/* the button sits exactly halfway between the end of the list and the bottom bar */}
+            <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", visibility: items.length ? "visible" : "hidden" }}><div style={{ width: "100%" }}><Pill ghost={!next} onClick={() => (next ? setOpen(next) : readAhead())}>{next ? (finished ? "Continue" : "Start") : "Read next portion"}</Pill></div></div>
           </div>
         </div>
       )}
 
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 5, background: "rgba(18,18,18,.94)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderTop: `1px solid ${C.line}`, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 5, background: "#000", borderTop: `1px solid ${C.line}`, height: NAV, boxSizing: "border-box" }}>
         <div style={{ maxWidth: 430, margin: "0 auto", display: "flex" }}>
           {[["today", "Today"], ["bible", "Bible"]].map(([k, l]) => (
-            <button key={k} onClick={() => { setTab(k); if (k === "today") setView(todayN); }} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "9px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, color: tab === k ? C.blue : C.sub, fontFamily: sans, fontSize: 11, fontWeight: 500 }}>{ICONS[k]}{l}</button>
+            <button key={k} onClick={() => { setTab(k); setWeekOff(0); if (k === "today") setView(todayN); }} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "9px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, color: tab === k ? C.blue : C.sub, fontFamily: sans, fontSize: 11, fontWeight: 500 }}>{ICONS[k]}{l}</button>
           ))}
         </div>
       </nav>
