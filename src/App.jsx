@@ -344,7 +344,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   const m = s.match(/^(\d?\s*[a-z][a-z ]*?)\s*(\d+)(?::(\d+))?$/i);
   let target = null;
   if (m) { const k = norm(m[1]); const f = BOOKS.find(([b]) => norm(b).startsWith(k) || k === norm(b) + "s"); if (f && +m[2] >= 1 && +m[2] <= f[1]) target = { b: f[0], n: +m[2], v: m[3] ? +m[3] : undefined }; }
-  const sl = s.toLowerCase();
+  const sl = s.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"');  // curly and straight quotes match each other
   const { hits, total } = useMemo(() => {
     const o = []; let t = 0;
     if (s.length < 2 || target) return { hits: o, total: 0 };
@@ -352,7 +352,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     for (const x of VERSES) { if ((lang !== "ta" && x.lo.includes(sl)) || (lang !== "en" && x.ta.includes(st))) { t++; if (o.length < 60) o.push({ ...x, ta: taOut(x.ta) }); } }
     return { hits: o, total: t };
   }, [s, !!target, lang, ver]);
-  const mark = tx => tx.split(new RegExp("(" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "i")).map((p, i) => i % 2 ? <mark key={i} style={{ background: "rgba(10,132,255,.35)", color: C.text, borderRadius: 3 }}>{p}</mark> : p);
+  const mark = tx => tx.split(new RegExp("(" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, "[\"\u201c\u201d]") + ")", "i")).map((p, i) => i % 2 ? <mark key={i} style={{ background: "rgba(10,132,255,.35)", color: C.text, borderRadius: 3 }}>{p}</mark> : p);
   const lines = (x, hl) => [lang !== "ta" && x.en ? ["en", x.en] : null, lang !== "en" && x.ta ? ["ta", x.ta] : null].filter(Boolean).map(([l, tx]) => <div key={l} lang={l} style={{ fontFamily: l === "ta" ? taFont : serif, fontSize: l === "ta" ? 15 : 16, lineHeight: 1.55, marginTop: l === "ta" && lang === "both" ? 4 : 0, color: l === "ta" && lang === "both" ? "#c7c7cc" : C.text }}>{hl ? mark(tx) : tx}</div>);
   const group = (title, list, off) => (
     <div style={{ marginBottom: 28 }}>

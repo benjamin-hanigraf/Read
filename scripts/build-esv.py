@@ -3,7 +3,8 @@
 
 Extracts the verse text from the ESV PDF (needs `pip install pymupdf`) and writes
 public/data/en.json as { "Genesis": [ ["verse 1", "verse 2", ...], ...chapters ], ... }.
-Dropped: front matter, section headings, psalm titles, footnotes and footnote markers.
+Dropped: front matter, section headings, psalm titles, footnotes and footnote markers; also tidied: apostrophes, line-break hyphens,
+and the opening quote marks the ESV repeats at each paragraph of a long speech.
 """
 import json, re, sys
 import pymupdf
@@ -45,6 +46,46 @@ for k, (name, nch, cap) in enumerate(BOOKS):
     clean = lambda t: re.sub(r"\s+", " ", re.sub(r"\[(Some|The earliest) [^\]]*manuscripts[^\]]*\]", "", t).replace("[", "").replace("]", "")).strip()  # editorial notes, then brackets
     chapters = [[clean(d.get(i, "")) for i in range(1, max(d, default=0) + 1)] for d in chapters]
     result[name] = chapters
+
+# ---- clean-up that needs the whole text ----
+# 1. typographic apostrophes, matching the curly quotes
+for chs in result.values():
+    for ch in chs:
+        for i, t in enumerate(ch): ch[i] = t.replace("'", "\u2019")
+
+# 2. a hyphen followed by a space is a line break in the PDF: "twenty- seventh" -> "twenty-seventh", and a word that was
+#    split across lines ("de- scribed") is joined when the joined word exists elsewhere in the text
+words = {w.lower() for chs in result.values() for ch in chs for t in ch for w in re.findall(r"[A-Za-z]+", t)}
+def join(m):
+    a, b = m.group(1), m.group(2)
+    return a + b if (a + b).lower() in words and (a + "-" + b).lower() not in words else a + "-" + b
+for chs in result.values():
+    for ch in chs:
+        for i, t in enumerate(ch): ch[i] = re.sub(r"([A-Za-z]+)- ([a-z]+)", join, re.sub(r"([A-Za-z]+)- ([A-Z][a-z]+)", lambda m: m.group(1) + "-" + m.group(2), t))
+
+# 3. the ESV re-opens a quotation at the start of every paragraph of a long speech, which looks wrong when each verse is
+#    shown on its own. When the speech is still open from the previous verse, drop that repeated opening mark; an opening
+#    mark that starts a new quotation is kept. A verse that follows "... said," / "... saying," always starts a new quotation,
+#    and so does a verse that is not within MAXGAP verses of where the speech was opened (guards against a quotation the
+#    ESV never closes).
+INTRO = re.compile(r"(:$|\b(said|says|say|saying|answered|answering|replied|replying|spoke|speak|speaking|cried|cry|crying|asked|asking|called|calling|declared|declares|commanded|command|prophesied|prayed|wrote|write|written|sang|shouted|exclaimed|proclaimed|proclaiming|testified|charged|told|tell|telling|appealing|appeal|begging|begged|pleading|urging|urged)\b[^.?!;:]{0,40},$)")
+MAXGAP = 80
+for chs in result.values():
+    d1 = d2 = 0  # double and single quotations still open
+    opened = prev = None
+    n = 0
+    for ch in chs:
+        for i, t in enumerate(ch):
+            n += 1
+            if t and prev and INTRO.search(prev) and d1: d1 = d2 = 0  # a new quotation starts here
+            if t.startswith("\u201c") and d1 > 0 and opened is not None and n - opened <= MAXGAP:
+                t = t[1:]
+                if t.startswith("\u2018") and d2 > 0: t = t[1:]
+                ch[i] = t
+            elif t.startswith("\u201c"): opened = n
+            if d1 == 0 and "\u201c" in t: opened = n
+            d1 = max(0, d1 + t.count("\u201c") - t.count("\u201d")); d2 = max(0, d2 + t.count("\u2018") - t.count("\u2019"))
+            if t: prev = t
 
 json.dump(result, open(out, "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))
 print("wrote", out, sum(len(ch) for chs in result.values() for ch in chs), "verses")

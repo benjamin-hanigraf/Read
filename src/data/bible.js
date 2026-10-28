@@ -32,12 +32,12 @@ const chapter = k => CH[k] || (CH[k] = Object.defineProperty({ en: {} }, "ta", {
 }));
 
 const rebuild = () => {
-  VERSES.length = 0;  // VERSES[].ta stays shifted (see taIn / taOut); en is lowercased once as lo for search
+  VERSES.length = 0;  // VERSES[].ta stays shifted (see taIn / taOut); en is lowercased once as lo for search, with curly quotes made straight
   for (const k in CH) {
     const b = k.replace(/ \d+$/, ""), n = +k.slice(b.length + 1), e = raw.en[k] || [], t = raw.ta[k] || [];
     for (let j = 0, m = Math.max(e.length, t.length); j < m; j++) {
       const en = e[j] || "", ta = t[j] || "";
-      if (en || ta) VERSES.push({ b, n, v: j + 1, en, ta, lo: en.toLowerCase() });
+      if (en || ta) VERSES.push({ b, n, v: j + 1, en, ta, lo: en.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"') });
     }
   }
 };
