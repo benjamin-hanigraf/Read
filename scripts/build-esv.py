@@ -41,7 +41,8 @@ for k, (name, nch, cap) in enumerate(BOOKS):
                     elif "ArialRegular" in font and size > 10 and not re.fullmatch(r"\s*Chapter \d+\s*", t):
                         add(t)
                 add(" ")
-    chapters = [[re.sub(r"\s+", " ", d.get(i, "")).strip() for i in range(1, max(d, default=0) + 1)] for d in chapters]
+    clean = lambda t: re.sub(r"\s+", " ", re.sub(r"\[(Some|The earliest) [^\]]*manuscripts[^\]]*\]", "", t).replace("[", "").replace("]", "")).strip()  # editorial notes, then brackets
+    chapters = [[clean(d.get(i, "")) for i in range(1, max(d, default=0) + 1)] for d in chapters]
     result[name] = chapters
 
 json.dump(result, open(out, "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))

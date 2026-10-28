@@ -257,7 +257,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
                       </div>
                     </div>
                   );
-                }) : <div style={{ color: C.sub, fontFamily: sans, fontSize: 15 }}>This chapter is not available in this language.</div>}
+                }) : <div style={{ color: C.sub, fontFamily: sans, fontSize: 15 }}>The full text for this chapter loads from your Bible files in the PWA build.</div>}
               </div>
             </section>
           );
