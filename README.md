@@ -29,3 +29,10 @@ npm run preview    # serve the production build locally
 
 - **iPhone (Safari):** open the site → Share → **Add to Home Screen**.
 - **Android (Chrome):** menu → **Install app**.
+
+## Bible data
+
+- **Tamil:** `public/data/ta.json`, generated from the Tamil Bible SQLite file (full Bible, 1,189 chapters, 31,104 verses):
+  `node scripts/build-tamil.mjs path/to/tamil_bible_new.sqlite` (needs Node 22+).
+- **English:** still the 9 bundled ESV sample chapters (`src/data/sample.js`) until the full text is added.
+- The data is loaded once at startup (`src/data/bible.js`) and cached by the service worker for offline use.

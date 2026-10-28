@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-import { SAMPLE } from "./data/sample.js";
 import { ARTS } from "./data/arts.js";
-import { TAMIL } from "./data/tamil.js";
 import { TA_NAMES } from "./data/names.js";
 
 const OT=[["Genesis",50],["Exodus",40],["Leviticus",27],["Numbers",36],["Deuteronomy",34],["Joshua",24],["Judges",21],["Ruth",4],["1 Samuel",31],["2 Samuel",24],["1 Kings",22],["2 Kings",25],["1 Chronicles",29],["2 Chronicles",36],["Ezra",10],["Nehemiah",13],["Esther",10],["Job",42],["Ecclesiastes",12],["Song of Solomon",8],["Isaiah",66],["Jeremiah",52],["Lamentations",5],["Ezekiel",48],["Daniel",12],["Hosea",14],["Joel",3],["Amos",9],["Obadiah",1],["Jonah",4],["Micah",7],["Nahum",3],["Habakkuk",3],["Zephaniah",3],["Haggai",2],["Zechariah",14],["Malachi",4]];
@@ -17,11 +15,7 @@ const ALL = flat(BOOKS);
 const nm = (b, lang) => (lang === "ta" ? TA_NAMES[BOOKS.findIndex(([x]) => x === b)] : b);
 const disp = (b, lang) => (lang === "ta" ? nm(b, "ta") : b === "Psalm" ? "Psalms" : b);
 const label = (c, lang) => { if (!c.length) return "Rest"; const [b1, n1] = c[0], [b2, n2] = c[c.length - 1]; const f = b => nm(b, lang); return b1 === b2 ? (n1 === n2 ? `${f(b1)} ${n1}` : `${f(b1)} ${n1}–${n2}`) : `${f(b1)} ${n1} – ${f(b2)} ${n2}`; };
-const parseEN = tx => { const p = tx.split(/⟦(\d+)⟧/), o = {}; for (let i = 1; i < p.length; i += 2) o[+p[i]] = p[i + 1].trim(); return o; };
-const CH = {};
-Object.entries(SAMPLE).forEach(([k, tx]) => { CH[k] = { en: parseEN(tx), ta: {} }; });
-Object.entries(TAMIL).forEach(([k, o]) => { CH[k] = CH[k] || { en: {}, ta: {} }; Object.entries(o).forEach(([v, s]) => { CH[k].ta[+v] = s; }); });
-const VERSES = Object.entries(CH).flatMap(([k, d]) => { const b = k.replace(/ \d+$/, ""), n = +k.split(" ").pop(); return [...new Set([...Object.keys(d.en), ...Object.keys(d.ta)])].map(Number).sort((a, c) => a - c).map(v => ({ b, n, v, en: d.en[v] || "", ta: d.ta[v] || "" })); });
+import { CH, VERSES } from "./data/bible.js";
 const LANGS = ["en", "ta", "both"];
 const LANG_LABEL = { en: "A", ta: "அ", both: "Aஅ" };
 const taFont = "'Noto Serif Tamil', 'Noto Sans Tamil', 'Tamil MN', 'Tamil Sangam MN', 'Nirmala UI', 'Latha', serif";
@@ -263,7 +257,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
                       </div>
                     </div>
                   );
-                }) : <div style={{ color: C.sub, fontFamily: sans, fontSize: 15 }}>The full text for this chapter loads from your Bible files in the PWA build.</div>}
+                }) : <div style={{ color: C.sub, fontFamily: sans, fontSize: 15 }}>This chapter isn't available in this language yet.</div>}
               </div>
             </section>
           );
@@ -372,7 +366,6 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
               {lines(h, true)}
             </div>)}
           </div> : <div style={{ color: C.sub, textAlign: "center", padding: "32px 0" }}>No results for “{s}”</div>}
-          <div style={{ color: C.sub, fontSize: 13, textAlign: "center", marginTop: 20 }}>This prototype searches {Object.keys(CH).length} sample chapters. The full build searches the whole Bible.</div>
         </div>
       ) : book ? (
         <div>
