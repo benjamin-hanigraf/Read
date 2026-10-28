@@ -159,9 +159,10 @@ const LangBtn = ({ lang, setLang }) => (
 );
 
 function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, favs, hls, toggleFav, toggleHl }) {
-  useBible();
+  const ver = useBible();
   const ref = useRef(null);
   const browse = !item.key;
+  const [cur, setCur] = useState(0);  // which chapter of a multi-chapter portion is under the top bar
   const idx = ALL.findIndex(([b, n]) => b === item.ch[0][0] && n === item.ch[0][1]);
   const [menu, setMenu] = useState(null);
   const [toast, setToast] = useState("");
@@ -173,6 +174,17 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   useSwipeBack(ref, close, true);
   useEffect(() => { setM(null); const el = ref.current && ref.current.querySelector("[data-hl]"); if (el) el.scrollIntoView({ block: "center" }); else if (ref.current) ref.current.scrollTop = 0; }, [item]);
   useEffect(() => { setJump(item.hl); const t0 = setTimeout(() => setJump(undefined), 1800); return () => clearTimeout(t0); }, [item]);
+  useEffect(() => {
+    const el = ref.current; if (!el || item.ch.length < 2) { setCur(0); return; }
+    const upd = () => {
+      const hb = el.querySelector("[data-hdr]").getBoundingClientRect().bottom, secs = el.querySelectorAll("[data-sec]");
+      let a = 0; secs.forEach((x, i) => { if (x.getBoundingClientRect().top <= hb + 8) a = i; });
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) a = secs.length - 1;  // at the very end you are in the last chapter
+      setCur(a);
+    };
+    el.addEventListener("scroll", upd, { passive: true }); upd();
+    return () => el.removeEventListener("scroll", upd);
+  }, [item, ver]);
   const step = d => { const c = ALL[idx + d]; if (c) { setDir(d); go({ ch: [c] }); } };
   const sx = useRef(null);
   const onTS = e => { sx.current = [e.touches[0].clientX, e.touches[0].clientY]; };
@@ -243,8 +255,8 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
       <div data-hdr="1" style={{ position: "sticky", top: 0, zIndex: 2, background: "#000", borderBottom: `1px solid ${C.line}` }}>
         <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(10px + ${TOP}) 20px 10px`, display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
-            <button onClick={close} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(17)} /></button>
-            <div style={{ fontFamily: sans, fontSize: 17, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label(item.ch, lang)}</div>
+            <button onClick={close} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -22px", padding: "12px 9px 12px 16px" }}><Chev d="left" h={xh(17)} /></button>
+            <div style={{ fontFamily: sans, fontSize: 17, fontWeight: 600, color: C.blue, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(() => { const [tb, tn] = item.ch[Math.min(cur, item.ch.length - 1)]; return `${nm(tb, lang)} ${tn}`; })()}</div>
           </div>
           <div style={{ display: "flex", background: C.card, borderRadius: RAD, overflow: "hidden", flexShrink: 0 }}>
             <button onClick={() => setSize(Math.max(16, size - 2))} aria-label="Smaller text" style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>−</button>
@@ -258,7 +270,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
           const k = b + " " + n, d = CH[k];
           const vs = d ? [...new Set([...(showEN ? Object.keys(d.en) : []), ...(showTA ? Object.keys(d.ta) : [])])].map(Number).sort((x, y) => x - y) : [];
           return (
-            <section key={k} style={{ marginBottom: 48 }}>
+            <section key={k} data-sec="1" style={{ marginBottom: 48 }}>
               {item.ch.length > 1 && <div style={{ fontFamily: sans, color: C.blue, fontSize: 17, fontWeight: 600, marginBottom: 14 }}>{nm(b, lang)} {n}</div>}
               <div style={{ fontSize: size, lineHeight: 1.65, color: C.text }}>
                 {vs.length ? vs.map(v => {
