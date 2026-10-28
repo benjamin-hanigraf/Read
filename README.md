@@ -32,7 +32,11 @@ npm run preview    # serve the production build locally
 
 ## Bible data
 
-- **Tamil:** `public/data/ta.json`, generated from the Tamil Bible SQLite file (full Bible, 1,189 chapters, 31,104 verses):
-  `node scripts/build-tamil.mjs path/to/tamil_bible_new.sqlite` (needs Node 22+).
-- **English:** still the 9 bundled ESV sample chapters (`src/data/sample.js`) until the full text is added.
-- The data is loaded once at startup (`src/data/bible.js`) and cached by the service worker for offline use.
+Both Bibles are loaded once at startup (`src/data/bible.js`) and cached by the service worker for offline use.
+Format: `{ "Genesis": [ ["verse 1", "verse 2", ...], ...chapters ], ... }` (about 1.2 MB and 1.5 MB gzipped).
+
+- **English (ESV):** `public/data/en.json`, extracted from the ESV PDF with fonts used to drop section headings,
+  psalm titles, footnotes and footnote markers: `pip install pymupdf && python3 scripts/build-esv.py "ESV Bible.pdf"`.
+  It needs `public/data/ta.json` present, to avoid mistaking figures such as "120,000" for verse numbers.
+- **Tamil:** `public/data/ta.json`, from the Tamil Bible SQLite file (Tamil letters shifted to 2-byte characters to
+  save space): `node scripts/build-tamil.mjs path/to/tamil_bible_new.sqlite` (Node 22+).

@@ -1,5 +1,7 @@
 // Usage: node scripts/build-tamil.mjs path/to/tamil_bible_new.sqlite
-// Writes public/data/ta.json shaped { "Genesis 1": { "1": "verse text", ... }, ... } in canonical order.
+// Writes public/data/ta.json shaped { "Genesis": [ ["verse 1", "verse 2", ...], ...chapters ], ... }.
+// To keep it small, Tamil letters (U+0B80-0BFF, 3 bytes each in UTF-8) are shifted to U+0100-017F (2 bytes);
+// src/data/bible.js shifts them back after loading.
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, writeFileSync } from "node:fs";
 
@@ -7,11 +9,12 @@ const BOOKS = ["Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","
 
 const db = new DatabaseSync(process.argv[2], { readOnly: true });
 const rows = db.prepare("SELECT Book, Chapter, Verse, TextData FROM Bible ORDER BY Book, Chapter, Verse").all();
+const shift = s => s.replace(/\u00ad/g, "").replace(/[\u0b80-\u0bff]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x0b80 + 0x100)).trim();
 const out = {};
 for (const { Book, Chapter, Verse, TextData } of rows) {
-  const k = `${BOOKS[Book - 1]} ${Chapter}`;
-  (out[k] ||= {})[Verse] = TextData.trim();
+  const chapters = (out[BOOKS[Book - 1]] ||= []);
+  (chapters[Chapter - 1] ||= [])[Verse - 1] = shift(TextData);
 }
 mkdirSync("public/data", { recursive: true });
 writeFileSync("public/data/ta.json", JSON.stringify(out));
-console.log(`${Object.keys(out).length} chapters, ${rows.length} verses`);
+console.log(`${Object.values(out).reduce((n, c) => n + c.length, 0)} chapters, ${rows.length} verses`);
