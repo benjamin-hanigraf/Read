@@ -191,6 +191,27 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   const onTE = e => { const s0 = sx.current; sx.current = null; if (!s0 || lpOn.current || s0[0] < 28) return; const dx = e.changedTouches[0].clientX - s0[0], dy = e.changedTouches[0].clientY - s0[1]; if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return; if (browse) step(dx < 0 ? 1 : -1); };
   useEffect(() => { if (!browse) return; const k = e => { if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); });
 
+  // Bible reader: keep pulling past the end (or the top) of a chapter and let go to move to the next (or previous) one.
+  // The finger's own travel is measured, so the normal spring still plays and this works with or without it.
+  const stepRef = useRef(step); stepRef.current = step;
+  useEffect(() => {
+    const el = ref.current; if (!browse || !el) return;
+    const PULL = 90; let g = null;
+    const ts = e => { g = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, last: e.touches[0].clientY, down: 0, up: 0 } : null; };
+    const tm = e => {
+      if (!g || lpOn.current || mref.current) return;
+      const t = e.touches[0], dy = t.clientY - g.last; g.last = t.clientY;
+      if (Math.abs(t.clientX - g.x) > Math.abs(t.clientY - g.y) && Math.abs(t.clientX - g.x) > 30) { g = null; return; }  // a sideways swipe, not a pull
+      const atTop = el.scrollTop <= 0, atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+      g.up = atEnd && dy < 0 ? g.up - dy : atEnd && dy > 0 ? Math.max(0, g.up - dy) : 0;      // dragging up at the end
+      g.down = atTop && dy > 0 ? g.down + dy : atTop && dy < 0 ? Math.max(0, g.down + dy) : 0;  // dragging down at the top
+    };
+    const te = () => { const q = g; g = null; if (!q) return; if (q.up >= PULL) { stepRef.current(1); if (navigator.vibrate) navigator.vibrate(10); } else if (q.down >= PULL) { stepRef.current(-1); if (navigator.vibrate) navigator.vibrate(10); } };
+    el.addEventListener("touchstart", ts, { passive: true }); el.addEventListener("touchmove", tm, { passive: true });
+    el.addEventListener("touchend", te); el.addEventListener("touchcancel", () => { g = null; });
+    return () => { el.removeEventListener("touchstart", ts); el.removeEventListener("touchmove", tm); el.removeEventListener("touchend", te); };
+  }, [browse]);
+
   const say = m => { setToast(m); clearTimeout(tt.current); tt.current = setTimeout(() => setToast(""), 1300); };
   const rangeKeys = m => { const lo = Math.min(m.a, m.to), hi = Math.max(m.a, m.to), o = []; for (let v = lo; v <= hi; v++) o.push(`${m.ck}:${v}`); return o; };
   const selKeys = m => rangeKeys(m).filter(k => ref.current && ref.current.querySelector(`[data-vk="${k}"]`));
