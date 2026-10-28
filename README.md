@@ -13,6 +13,7 @@ npm run preview    # serve the production build locally
 
 ## Project layout
 
+- `src/theme.js` – the accent colour, defined once: change `ACCENT` there and the whole app (including the artwork) follows
 - `src/App.jsx` – the app (from the original prototype)
 - `src/data/` – bundled sample Bible text, Tamil sample, book names and daily line art
 - `public/icons/` – PWA icons generated from the Read logo

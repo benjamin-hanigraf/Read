@@ -2,8 +2,9 @@ import { Component, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import { loadBible } from "./data/bible.js";
+import { ACCENT } from "./theme.js";
 
-const reload = <button onClick={() => location.reload()} style={{ display: "block", margin: "16px auto 0", background: "none", border: "none", color: "#0a84ff", font: "600 16px -apple-system, sans-serif", cursor: "pointer" }}>Reload</button>;
+const reload = <button onClick={() => location.reload()} style={{ display: "block", margin: "16px auto 0", background: "none", border: "none", color: ACCENT, font: "600 16px -apple-system, sans-serif", cursor: "pointer" }}>Reload</button>;
 
 // a render error would otherwise leave a blank black screen
 class Boundary extends Component {
