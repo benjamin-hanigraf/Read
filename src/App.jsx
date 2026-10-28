@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useReducer } from "react";
 
 import { ARTS } from "./data/arts.js";
 import { TA_NAMES } from "./data/names.js";
@@ -62,7 +62,8 @@ const chaptersFor = (t, r) => { const N = TR[t][1].length; return TR[t][1].slice
 const plan = { dow: 1 };
 const isCatchUp = n => (plan.dow + n) % 7 === 0;
 const readIdx = n => { const s0 = (7 - plan.dow) % 7; return n - (n > s0 ? Math.floor((n - 1 - s0) / 7) + 1 : 0); };
-const planLen = () => { let n = 0; while (isCatchUp(n) || readIdx(n) < R) n++; return n; };
+const planLens = {};
+const planLen = () => planLens[plan.dow] ??= (() => { let n = 0; while (isCatchUp(n) || readIdx(n) < R) n++; return n; })();
 const dayItems = n => isCatchUp(n) || readIdx(n) >= R ? [] : [0, 1, 2].map(t => ({ key: `${n}:${t}`, n, t, ch: chaptersFor(t, readIdx(n)) })).filter(i => i.ch.length);
 
 const C = { bg: "#000", card: "#1c1c1e", card2: "#2c2c2e", text: "#f5f5f7", sub: "#8e8e93", line: "#38383a", blue: "#0a84ff" };
@@ -84,9 +85,17 @@ const Chev = ({ d = "right", h = 0.7 }) => (
 );
 // On-device storage. Works in the installed PWA; the Claude preview blocks it, so it silently falls back to memory.
 const store = {
-  get(k, d) { try { const v = localStorage.getItem("read:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  get(k, d, ok = () => true) { try { const v = localStorage.getItem("read:" + k); if (v == null) return d; const j = JSON.parse(v); return ok(j) ? j : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem("read:" + k, JSON.stringify(v)); } catch {} },
 };
+const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
+const okKeys = (v, re) => isObj(v) && Object.keys(v).every(k => re.test(k));
+const okStart = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(new Date(v + "T00:00"));
+const okDone = v => okKeys(v, /^\d+:[0-2]$/);
+const okSize = v => typeof v === "number" && v >= 16 && v <= 28;
+const okLang = v => LANGS.includes(v);
+const okFavs = v => Array.isArray(v) && v.every(k => typeof k === "string" && /^.+ \d+:\d+$/.test(k));
+const okHls = v => okKeys(v, /^.+ \d+:\d+$/);
 const iso = d => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 6e4); return z.toISOString().slice(0, 10); };
 const dayDiff = (a, b) => Math.round((new Date(a + "T00:00") - new Date(b + "T00:00")) / 864e5);
 const addDays = (s, k) => { const d = new Date(s + "T00:00"); d.setDate(d.getDate() + k); return d; };
@@ -96,7 +105,7 @@ const Pill = ({ children, onClick, disabled, ghost }) => (
 );
 
 const Check = ({ on, onClick }) => (
-  <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label="Mark as read" style={{ background: "none", border: "none", padding: 11, margin: -11, cursor: "pointer", flexShrink: 0, display: "flex" }}>
+  <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label="Mark as read" aria-pressed={on} style={{ background: "none", border: "none", padding: 11, margin: -11, cursor: "pointer", flexShrink: 0, display: "flex" }}>
     <span style={{ width: 22, height: 22, borderRadius: 11, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", border: on ? "none" : `1.5px solid ${C.line}`, background: on ? C.blue : "transparent", color: "#fff", fontSize: 13, fontWeight: 700, transition: "background .2s" }}>{on ? "✓" : ""}</span>
   </button>
 );
@@ -224,7 +233,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   const sec = { background: "none", border: "none", height: 36, padding: 0, cursor: "pointer", color: C.text, fontFamily: sans, display: "flex", alignItems: "center", justifyContent: "center" };
   const rk = menu ? rangeKeys(menu) : [];
   return (
-    <div ref={ref} onTouchStart={onTS} onTouchEnd={onTE} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 10, overflowY: "auto", overflowX: "hidden" }}>
+    <div ref={ref} onTouchStart={onTS} onTouchEnd={onTE} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 10, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
       <div data-hdr="1" style={{ position: "sticky", top: 0, zIndex: 2, background: "rgba(0,0,0,.82)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderBottom: `1px solid ${C.line}` }}>
         <div style={{ maxWidth: 430, margin: "0 auto", padding: "10px 20px", display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
@@ -292,7 +301,12 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   let target = null;
   if (m) { const k = norm(m[1]); const f = BOOKS.find(([b]) => norm(b).startsWith(k) || k === norm(b) + "s"); if (f && +m[2] >= 1 && +m[2] <= f[1]) target = { b: f[0], n: +m[2], v: m[3] ? +m[3] : undefined }; }
   const sl = s.toLowerCase();
-  const hits = s.length > 1 && !target ? VERSES.filter(x => x.en.toLowerCase().includes(sl) || x.ta.includes(s)).slice(0, 60) : [];
+  const hits = useMemo(() => {
+    const o = [];
+    if (s.length < 2 || target) return o;
+    for (const x of VERSES) { if ((lang !== "ta" && x.lo.includes(sl)) || (lang !== "en" && x.ta.includes(s))) { o.push(x); if (o.length === 60) break; } }
+    return o;
+  }, [s, !!target, lang]);
   const mark = tx => tx.split(new RegExp("(" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "i")).map((p, i) => i % 2 ? <mark key={i} style={{ background: "rgba(10,132,255,.35)", color: C.text, borderRadius: 3 }}>{p}</mark> : p);
   const lines = (x, hl) => [lang !== "ta" && x.en ? ["en", x.en] : null, lang !== "en" && x.ta ? ["ta", x.ta] : null].filter(Boolean).map(([l, tx]) => <div key={l} lang={l} style={{ fontFamily: l === "ta" ? taFont : serif, fontSize: l === "ta" ? 15 : 16, lineHeight: 1.55, marginTop: l === "ta" && lang === "both" ? 4 : 0, color: l === "ta" && lang === "both" ? "#c7c7cc" : C.text }}>{hl ? mark(tx) : tx}</div>);
   const group = (title, list, off) => (
@@ -384,7 +398,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
       </>)}
     </div>
     {(favsView || bookView) && (
-      <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: 0, zIndex: 4, background: C.bg, overflowY: "auto", overflowX: "hidden", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
+      <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: 0, zIndex: 4, background: C.bg, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
         <div style={{ maxWidth: 430, margin: "0 auto", padding: "28px 24px 96px" }}>{showFavs ? favsView : bookView}</div>
       </div>
     )}
@@ -429,7 +443,7 @@ function Calendar({ start, today, view, status, pick, close, mark }) {
   const sw = useRef(null);
   const arrow = { background: "none", border: "none", color: C.blue, fontSize: 26, cursor: "pointer", padding: "6px 10px", display: "inline-flex", alignItems: "center", fontSize: 22 };
   return (
-    <div ref={rootRef} onTouchStart={e => { sw.current = [e.touches[0].clientX, e.touches[0].clientY]; }} onTouchEnd={e => { const s0 = sw.current; sw.current = null; if (!s0 || s0[0] < 28 || ps.current.on || ps.current.quiet) return; const dx = e.changedTouches[0].clientX - s0[0], dy = e.changedTouches[0].clientY - s0[1]; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1); }} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 20, overflowY: "auto", overflowX: "hidden" }}>
+    <div ref={rootRef} onTouchStart={e => { sw.current = [e.touches[0].clientX, e.touches[0].clientY]; }} onTouchEnd={e => { const s0 = sw.current; sw.current = null; if (!s0 || s0[0] < 28 || ps.current.on || ps.current.quiet) return; const dx = e.changedTouches[0].clientX - s0[0], dy = e.changedTouches[0].clientY - s0[1]; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1); }} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 20, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
       <div style={{ maxWidth: 430, margin: "0 auto", padding: "28px 24px 60px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "baseline", minWidth: 0 }}>
@@ -455,18 +469,30 @@ function Calendar({ start, today, view, status, pick, close, mark }) {
 
 export default function App() {
   const today = iso(new Date());
-  const [start, setStart] = useState(() => store.get("start", null));
+  const [start, setStart] = useState(() => store.get("start", null, okStart));
   const [draft, setDraft] = useState(today);
   const [tab, setTab] = useState("today");
-  const [view, setView] = useState(() => { const s = store.get("start", null); return s ? Math.max(0, dayDiff(iso(new Date()), s)) : 0; });
-  const [done, setDone] = useState(() => store.get("done", {}));
+  const [view, setView] = useState(() => { const s = store.get("start", null, okStart); return s ? Math.max(0, dayDiff(iso(new Date()), s)) : 0; });
+  const [done, setDone] = useState(() => store.get("done", {}, okDone));
   const [open, setOpen] = useState(null);
-  const [size, setSize] = useState(() => store.get("size", 20));
-  const [lang, setLang] = useState(() => store.get("lang", "en"));
-  const [favs, setFavs] = useState(() => store.get("favs", []));
-  const [hls, setHls] = useState(() => store.get("hls", {}));
+  const [size, setSize] = useState(() => store.get("size", 20, okSize));
+  const [lang, setLang] = useState(() => store.get("lang", "en", okLang));
+  const [favs, setFavs] = useState(() => store.get("favs", [], okFavs));
+  const [hls, setHls] = useState(() => store.get("hls", {}, okHls));
   const [cal, setCal] = useState(false);
   const [artTap, setArtTap] = useState(0);
+  const [, refresh] = useReducer(x => x + 1, 0);
+  useEffect(() => {
+    let day = iso(new Date());
+    const sync = () => {
+      const t = iso(new Date());
+      if (t !== day && start) { const prev = Math.max(0, dayDiff(day, start)), cur = Math.max(0, dayDiff(t, start)); setView(v => (v === prev ? cur : v)); }
+      day = t; refresh();
+    };
+    const iv = setInterval(sync, 60000);
+    window.addEventListener("resize", sync); window.addEventListener("focus", sync); document.addEventListener("visibilitychange", sync);
+    return () => { clearInterval(iv); window.removeEventListener("resize", sync); window.removeEventListener("focus", sync); document.removeEventListener("visibilitychange", sync); };
+  }, [start]);
   useEffect(() => { store.set("start", start); }, [start]);
   useEffect(() => { store.set("done", done); }, [done]);
   useEffect(() => { store.set("size", size); }, [size]);
@@ -488,7 +514,7 @@ export default function App() {
         <span style={{ fontSize: 17 }}>Start date</span>
         <input type="date" value={draft} onChange={e => setDraft(e.target.value)} style={{ background: "none", border: "none", color: C.text, fontSize: 17, fontFamily: sans, colorScheme: "dark", padding: "14px 0" }} />
       </div>
-      <Pill onClick={() => { setStart(draft); setView(Math.max(0, dayDiff(today, draft))); }}>Begin</Pill>
+      <Pill onClick={() => { if (!okStart(draft)) return; setStart(draft); setView(Math.max(0, dayDiff(today, draft))); }}>Begin</Pill>
     </div>
   );
 
@@ -506,7 +532,7 @@ export default function App() {
   const chaptersDone = Object.values(seen).reduce((s, x) => s + x.size, 0);
   const booksDone = BOOKS.filter(([b, c]) => seen[b] && seen[b].size === c).length;
   const dayStatus = d => { if (isCatchUp(d)) return d > 0 && dayStatus(d - 1) === "full" ? "full" : "rest"; const it = dayItems(d); if (!it.length) return "rest"; const c = it.filter(i => done[i.key]).length; return c === it.length ? "full" : c ? "part" : "none"; };
-  let streak = 0; for (let d = todayN - (dayStatus(todayN) === "full" ? 0 : 1); d >= 0; d--) { const s = dayStatus(d); if (s === "rest") continue; if (s === "full") streak++; else break; }
+  let streak = 0; for (let d = Math.min(todayN - (dayStatus(todayN) === "full" ? 0 : 1), planLen()); d >= 0; d--) { const s = dayStatus(d); if (s === "rest") continue; if (s === "full") streak++; else break; }
 
   const nextAfter = k => { const i = items.findIndex(x => x.key === k); return i < 0 ? undefined : [...items.slice(i + 1), ...items.slice(0, i)].find(x => !done[x.key]); };
   const readAhead = () => { for (let d = n + 1; d < planLen(); d++) { const it = dayItems(d).find(i => !done[i.key]); if (it) { setView(d); setOpen(it); return; } } };

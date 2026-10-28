@@ -17,7 +17,7 @@ npm run preview    # serve the production build locally
 - `src/data/` – bundled sample Bible text, Tamil sample, book names and daily line art
 - `public/icons/` – PWA icons generated from the Read logo
 - `vite.config.js` – PWA manifest + service worker (precaches everything for offline use)
-- `vercel.json` – Vercel config (no-cache headers for the service worker and manifest)
+- `vercel.json` – Vercel config: security headers (CSP etc.), long caching for hashed assets, no-cache for the service worker and manifest
 
 ## Deploy on Vercel
 

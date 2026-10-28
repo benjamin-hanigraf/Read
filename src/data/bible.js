@@ -8,8 +8,16 @@ export const VERSES = [];
 const fetchBible = (lang) => fetch(`/data/${lang}.json`).then(r => { if (!r.ok) throw new Error(`Could not load ${lang}`); return r.text(); })
   .then(t => JSON.parse(lang === "ta" ? t.replace(/[Ā-ſ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x0a80)) : t));
 
+const CHAPTERS = 1189;
+
 export async function loadBible() {
-  const data = { en: await fetchBible("en"), ta: await fetchBible("ta") };
+  const [en, ta] = await Promise.all([fetchBible("en"), fetchBible("ta")]);
+  const data = { en, ta };
+  // a truncated or corrupted download must fail loudly instead of showing a Bible with holes
+  for (const lang of ["en", "ta"]) {
+    const n = Object.values(data[lang]).reduce((t, c) => t + c.length, 0);
+    if (n !== CHAPTERS) throw new Error(`${lang} Bible has ${n} chapters, expected ${CHAPTERS}`);
+  }
   for (const lang of ["ta", "en"]) {
     for (const [book, chapters] of Object.entries(data[lang])) {
       chapters.forEach((verses, i) => {
@@ -21,6 +29,6 @@ export async function loadBible() {
   Object.entries(CH).forEach(([k, d]) => {
     const b = k.replace(/ \d+$/, ""), n = +k.split(" ").pop();
     [...new Set([...Object.keys(d.en), ...Object.keys(d.ta)])].map(Number).sort((a, c) => a - c)
-      .forEach(v => VERSES.push({ b, n, v, en: d.en[v] || "", ta: d.ta[v] || "" }));
+      .forEach(v => VERSES.push({ b, n, v, en: d.en[v] || "", ta: d.ta[v] || "", lo: (d.en[v] || "").toLowerCase() }));  // lo: lowercase English, computed once for search
   });
 }
