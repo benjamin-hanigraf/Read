@@ -96,7 +96,7 @@ const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
 const okKeys = (v, re) => isObj(v) && Object.keys(v).every(k => re.test(k));
 const okStart = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(new Date(v + "T00:00"));
 const okDone = v => okKeys(v, /^\d+:[0-2]$/);
-const okSize = v => typeof v === "number" && v >= 16 && v <= 28;
+const okSize = v => typeof v === "number" && v >= 10 && v <= 28;
 const okLang = v => LANGS.includes(v);
 const okFavs = v => Array.isArray(v) && v.every(k => typeof k === "string" && /^.+ \d+:\d+$/.test(k));
 const okHls = v => okKeys(v, /^.+ \d+:\d+$/);
@@ -160,57 +160,63 @@ const LangBtn = ({ lang, setLang }) => (
 
 function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, favs, hls, toggleFav, toggleHl }) {
   const ver = useBible();
-  const ref = useRef(null);
+  const ref = useRef(null), sc = useRef(null);  // ref: the whole screen (slides away on swipe-back), sc: the scrolling text under the fixed top bar
   const browse = !item.key;
-  const [cur, setCur] = useState(0);  // which chapter of a multi-chapter portion is under the top bar
-  const idx = ALL.findIndex(([b, n]) => b === item.ch[0][0] && n === item.ch[0][1]);
+  const [cur, setCur] = useState(null);  // chapter ("Genesis 16") currently under the top bar
+  // Bible reader: chapters are loaded around the one you opened, so it scrolls on continuously in both directions
+  const idxOf = c => ALL.findIndex(([b, n]) => b === c[0] && n === c[1]);
+  const first = useMemo(() => { const i = idxOf(item.ch[0]); return browse && i > 0 ? [ALL[i - 1], ...item.ch] : item.ch; }, [item]);
+  const [ext, setExt] = useState({ item, list: first });
+  const list = ext.item === item ? ext.list : first;
+  const setList = l => setExt({ item, list: l });
+  const anchor = useRef(null), pend = useRef(false), touched = useRef(false), lastTop = useRef(0);
   const [menu, setMenu] = useState(null);
   const [toast, setToast] = useState("");
   const [jump, setJump] = useState(item.hl);
-  const [dir, setDir] = useState(0);
   const tt = useRef(0), act = useRef({}), lpOn = useRef(false), mref = useRef(null);
   act.current = { favs, hls, toggleFav, toggleHl, lang };
   const setM = m => { mref.current = m; setMenu(m); };
   useSwipeBack(ref, close, true);
-  useEffect(() => { setM(null); const el = ref.current && ref.current.querySelector("[data-hl]"); if (el) el.scrollIntoView({ block: "center" }); else if (ref.current) ref.current.scrollTop = 0; }, [item]);
+  const place = () => {
+    const scr = sc.current; if (!scr) return;
+    const hl = scr.querySelector("[data-hl]");
+    if (hl) { hl.scrollIntoView({ block: "center" }); return; }
+    const t = browse && idxOf(item.ch[0]) > 0 && scr.querySelector(`[data-vs="${item.ch[0][0]} ${item.ch[0][1]}"]`);
+    if (t) scr.scrollTop += t.getBoundingClientRect().top - (ref.current.querySelector("[data-hdr]").getBoundingClientRect().bottom + 12);  // opened chapter just under the bar with its head tucked behind it; the previous chapter is above
+    else scr.scrollTop = 0;
+  };
+  useEffect(() => { touched.current = false; setCur(null); setM(null); place(); }, [item]);
+  useEffect(() => { if (!touched.current) place(); }, [ver]);  // text arrived after opening: settle again
   useEffect(() => { setJump(item.hl); const t0 = setTimeout(() => setJump(undefined), 1800); return () => clearTimeout(t0); }, [item]);
+  // after chapters are added above or dropped from the top, keep the text you are reading where it was
+  useLayoutEffect(() => {
+    const a = anchor.current; anchor.current = null; pend.current = false;
+    const scr = sc.current; if (!a || !scr) return;
+    const el = scr.querySelector(`[data-key="${a.key}"]`);
+    if (el) scr.scrollTop += el.getBoundingClientRect().top - a.top;
+  }, [list]);
   useEffect(() => {
-    const el = ref.current; if (!el || item.ch.length < 2) { setCur(0); return; }
+    const el = sc.current; if (!el) return;
+    const MAXN = 7, NEAR = 1200;
+    const keep = () => { const top = el.getBoundingClientRect().top, x = [...el.querySelectorAll("[data-sec]")].find(q => q.getBoundingClientRect().bottom > top + 1); anchor.current = x ? { key: x.getAttribute("data-key"), top: x.getBoundingClientRect().top } : null; };
     const upd = () => {
-      const hb = el.querySelector("[data-hdr]").getBoundingClientRect().bottom, secs = el.querySelectorAll("[data-sec]");
+      const hb = ref.current.querySelector("[data-hdr]").getBoundingClientRect().bottom, secs = el.querySelectorAll("[data-sec]");
+      if (!secs.length) return;
       let a = 0; secs.forEach((x, i) => { if (x.getBoundingClientRect().top <= hb + 8) a = i; });
-      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) a = secs.length - 1;  // at the very end you are in the last chapter
-      setCur(a);
+      const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+      if (atEnd && (!browse || idxOf(list[list.length - 1]) === ALL.length - 1)) a = secs.length - 1;  // at the very end you are in the last chapter
+      setCur(secs[a].getAttribute("data-key"));
+      if (!browse || !bibleReady(lang) || pend.current) return;
+      const dy = el.scrollTop - lastTop.current; lastTop.current = el.scrollTop;
+      const full = list.length >= MAXN;  // once full, only grow in the direction you are scrolling
+      if ((!full || dy < 0) && el.scrollTop < NEAR && idxOf(list[0]) > 0) { pend.current = true; keep(); setList([ALL[idxOf(list[0]) - 1], ...list].slice(0, MAXN)); }
+      else if ((!full || dy > 0) && el.scrollHeight - el.scrollTop - el.clientHeight < NEAR && idxOf(list[list.length - 1]) < ALL.length - 1) { pend.current = true; keep(); setList([...list, ALL[idxOf(list[list.length - 1]) + 1]].slice(-MAXN)); }
     };
-    el.addEventListener("scroll", upd, { passive: true }); upd();
-    return () => el.removeEventListener("scroll", upd);
-  }, [item, ver]);
-  const step = d => { const c = ALL[idx + d]; if (c) { setDir(d); go({ ch: [c] }); } };
-  const sx = useRef(null);
-  const onTS = e => { sx.current = [e.touches[0].clientX, e.touches[0].clientY]; };
-  const onTE = e => { const s0 = sx.current; sx.current = null; if (!s0 || lpOn.current || s0[0] < 28) return; const dx = e.changedTouches[0].clientX - s0[0], dy = e.changedTouches[0].clientY - s0[1]; if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return; if (browse) step(dx < 0 ? 1 : -1); };
-  useEffect(() => { if (!browse) return; const k = e => { if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); });
-
-  // Bible reader: keep pulling past the end (or the top) of a chapter and let go to move to the next (or previous) one.
-  // The finger's own travel is measured, so the normal spring still plays and this works with or without it.
-  const stepRef = useRef(step); stepRef.current = step;
-  useEffect(() => {
-    const el = ref.current; if (!browse || !el) return;
-    const PULL = 90; let g = null;
-    const ts = e => { g = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, last: e.touches[0].clientY, down: 0, up: 0 } : null; };
-    const tm = e => {
-      if (!g || lpOn.current || mref.current) return;
-      const t = e.touches[0], dy = t.clientY - g.last; g.last = t.clientY;
-      if (Math.abs(t.clientX - g.x) > Math.abs(t.clientY - g.y) && Math.abs(t.clientX - g.x) > 30) { g = null; return; }  // a sideways swipe, not a pull
-      const atTop = el.scrollTop <= 0, atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-      g.up = atEnd && dy < 0 ? g.up - dy : atEnd && dy > 0 ? Math.max(0, g.up - dy) : 0;      // dragging up at the end
-      g.down = atTop && dy > 0 ? g.down + dy : atTop && dy < 0 ? Math.max(0, g.down + dy) : 0;  // dragging down at the top
-    };
-    const te = () => { const q = g; g = null; if (!q) return; if (q.up >= PULL) { stepRef.current(1); if (navigator.vibrate) navigator.vibrate(10); } else if (q.down >= PULL) { stepRef.current(-1); if (navigator.vibrate) navigator.vibrate(10); } };
-    el.addEventListener("touchstart", ts, { passive: true }); el.addEventListener("touchmove", tm, { passive: true });
-    el.addEventListener("touchend", te); el.addEventListener("touchcancel", () => { g = null; });
-    return () => { el.removeEventListener("touchstart", ts); el.removeEventListener("touchmove", tm); el.removeEventListener("touchend", te); };
-  }, [browse]);
+    const mark = () => { touched.current = true; };
+    el.addEventListener("scroll", upd, { passive: true }); el.addEventListener("touchstart", mark, { passive: true }); el.addEventListener("wheel", mark, { passive: true });
+    upd();
+    return () => { el.removeEventListener("scroll", upd); el.removeEventListener("touchstart", mark); el.removeEventListener("wheel", mark); };
+  }, [item, ver, list, lang]);
 
   const say = m => { setToast(m); clearTimeout(tt.current); tt.current = setTimeout(() => setToast(""), 1300); };
   const rangeKeys = m => { const lo = Math.min(m.a, m.to), hi = Math.max(m.a, m.to), o = []; for (let v = lo; v <= hi; v++) o.push(`${m.ck}:${v}`); return o; };
@@ -231,7 +237,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
     const vkAt = (x, y) => { const e = document.elementFromPoint(Math.min(Math.max(x, 2), window.innerWidth - 2), Math.min(Math.max(y, hb() + 4), window.innerHeight - 8)); const v = e && e.closest ? e.closest("[data-vk]") : null; return v ? v.getAttribute("data-vk") : null; };
     const extend = (x, y) => { const m = mref.current; if (!m) return; const vk = vkAt(x, y); if (!vk) return; const p = pk(vk); if (`${p.b} ${p.n}` !== m.ck || p.v === m.to) return; setM({ ...m, to: p.v }); };
     const hover = (x, y) => (mref.current ? mref.current.pts.findIndex(([px, py]) => Math.hypot(px - x, py - y) < 38) : -1);
-    const tick = () => { s.raf = 0; if (!s.on) return; const top = hb() + 70, bot = window.innerHeight - 90; let d = 0; if (s.fy < top) d = -(1.5 + (top - s.fy) / 14); else if (s.fy > bot) d = 1.5 + (s.fy - bot) / 14; if (d) { el.scrollTop += d; extend(s.fx, s.fy); s.raf = requestAnimationFrame(tick); } };
+    const tick = () => { s.raf = 0; if (!s.on) return; const top = hb() + 70, bot = window.innerHeight - 90; let d = 0; if (s.fy < top) d = -(1.5 + (top - s.fy) / 14); else if (s.fy > bot) d = 1.5 + (s.fy - bot) / 14; if (d) { sc.current.scrollTop += d; extend(s.fx, s.fy); s.raf = requestAnimationFrame(tick); } };
     const begin = (x, y, tg) => {
       const inMenu = tg && tg.closest && tg.closest("[data-mb]");
       s.tap = mref.current && !inMenu ? { x, y, t: Date.now() } : null;
@@ -272,33 +278,34 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   const sec = { background: "none", border: "none", height: 36, padding: 0, cursor: "pointer", color: C.text, fontFamily: sans, display: "flex", alignItems: "center", justifyContent: "center" };
   const rk = menu ? rangeKeys(menu) : [];
   return (
-    <div ref={ref} onTouchStart={onTS} onTouchEnd={onTE} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 10, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
-      <div data-hdr="1" style={{ position: "sticky", top: 0, zIndex: 2, background: "#000", borderBottom: `1px solid ${C.line}` }}>
+    <div ref={ref} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 10, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div data-hdr="1" style={{ flex: "0 0 auto", background: "#000", borderBottom: `1px solid ${C.line}` }}>
         <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(10px + ${TOP}) 20px 10px`, display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
             <button onClick={close} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -22px", padding: "12px 9px 12px 16px" }}><Chev d="left" h={xh(17)} /></button>
-            <div style={{ fontFamily: sans, fontSize: 17, fontWeight: 600, color: C.blue, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(() => { const [tb, tn] = item.ch[Math.min(cur, item.ch.length - 1)]; return `${nm(tb, lang)} ${tn}`; })()}</div>
+            <div style={{ fontFamily: sans, fontSize: 17, fontWeight: 600, color: C.blue, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(() => { const [tb, tn] = (cur && list.find(([b, n]) => b + " " + n === cur)) || item.ch[0]; return `${nm(tb, lang)} ${tn}`; })()}</div>
           </div>
           <div style={{ display: "flex", background: C.card, borderRadius: RAD, overflow: "hidden", flexShrink: 0 }}>
-            <button onClick={() => setSize(Math.max(16, size - 2))} aria-label="Smaller text" style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>−</button>
+            <button onClick={() => setSize(Math.max(10, size - 2))} aria-label="Smaller text" style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>−</button>
             <button onClick={() => setLang(LANGS[(LANGS.indexOf(lang) + 1) % 3])} aria-label="Language" style={{ ...sec, width: 52, borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}` }}><LangLabel l={lang} /></button>
             <button onClick={() => setSize(Math.min(28, size + 2))} aria-label="Larger text" style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>+</button>
           </div>
         </div>
       </div>
-      <div key={item.ch.map(c => c.join(" ")).join("|")} style={{ maxWidth: 430, margin: "0 auto", padding: browse ? "40px 28px calc(80px + env(safe-area-inset-bottom, 0px))" : "40px 28px calc(40px + env(safe-area-inset-bottom, 0px))", animation: dir ? `${dir > 0 ? "wInR" : "wInL"} .3s cubic-bezier(.2,.8,.2,1)` : "none" }}>
-        {item.ch.map(([b, n]) => {
-          const k = b + " " + n, d = CH[k];
+      <div ref={sc} style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: browse ? "none" : "contain" }}>
+      <div key={item.ch.map(c => c.join(" ")).join("|")} style={{ maxWidth: 430, margin: "0 auto", padding: browse ? "40px 28px calc(80px + env(safe-area-inset-bottom, 0px))" : "40px 28px calc(40px + env(safe-area-inset-bottom, 0px))" }}>
+        {list.map(([b, n], ci) => {
+          const k = b + " " + n, d = CH[k], target = k === item.ch[0][0] + " " + item.ch[0][1];  // item.hl belongs to the opened chapter only
           const vs = d ? [...new Set([...(showEN ? Object.keys(d.en) : []), ...(showTA ? Object.keys(d.ta) : [])])].map(Number).sort((x, y) => x - y) : [];
           return (
-            <section key={k} data-sec="1" style={{ marginBottom: 48 }}>
-              {item.ch.length > 1 && <div style={{ fontFamily: sans, color: C.blue, fontSize: 17, fontWeight: 600, marginBottom: 14 }}>{nm(b, lang)} {n}</div>}
-              <div style={{ fontSize: size, lineHeight: 1.65, color: C.text }}>
+            <section key={k} data-sec="1" data-key={k} style={{ marginBottom: 48 }}>
+              {ci > 0 && <div style={{ fontFamily: sans, color: C.blue, fontSize: 17, fontWeight: 600, marginBottom: 14 }}>{nm(b, lang)} {n}</div>}
+              <div data-vs={k} style={{ fontSize: size, lineHeight: 1.65, color: C.text }}>
                 {vs.length ? vs.map(v => {
                   const vk = `${b} ${n}:${v}`, sel = menu && menu.ck === k && v >= Math.min(menu.a, menu.to) && v <= Math.max(menu.a, menu.to);
                   return (
-                    <div key={v} data-vk={vk} data-hl={item.hl === v ? 1 : undefined} style={{ display: "flex", alignItems: "baseline", padding: "4px 8px", margin: "0 -8px 6px", borderRadius: RAD, transition: "background .15s", background: sel ? "rgba(10,132,255,.38)" : hls[vk] || jump === v ? "rgba(10,132,255,.22)" : "transparent" }}>
-                      <span style={{ flex: "0 0 2em", fontFamily: sans, fontSize: "0.68em", fontWeight: 600, lineHeight: 1, color: C.blue, fontVariantNumeric: "lining-nums tabular-nums" }}>{v}</span>
+                    <div key={v} data-vk={vk} data-hl={target && item.hl === v ? 1 : undefined} style={{ display: "flex", alignItems: "baseline", padding: "4px 8px", margin: "0 -8px 6px", borderRadius: RAD, transition: "background .15s", background: sel ? "rgba(10,132,255,.38)" : hls[vk] || (target && jump === v) ? "rgba(10,132,255,.22)" : "transparent" }}>
+                      <span style={{ flex: "0 0 2em", fontFamily: sans, fontSize: `${Math.max(9, size * 0.68)}px`, fontWeight: 600, lineHeight: 1, color: C.blue, fontVariantNumeric: "lining-nums tabular-nums" }}>{v}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {showEN && d.en[v] && <div lang="en" style={{ fontFamily: serif, textAlign: "justify", hyphens: "auto", WebkitHyphens: "auto" }}>{d.en[v]}</div>}
                         {showTA && d.ta[v] && <div lang="ta" style={{ fontFamily: taFont, fontSize: "0.95em", lineHeight: 1.75, textAlign: "left", marginTop: showEN ? 6 : 0, color: showEN ? "#c7c7cc" : C.text }}>{d.ta[v]}</div>}
@@ -311,6 +318,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
           );
         })}
         {!browse && <Pill onClick={advance}>{last ? "Done" : "Next"}</Pill>}
+      </div>
       </div>
       {menu && (
         <div style={{ position: "fixed", inset: 0, zIndex: 30, pointerEvents: "none" }}>

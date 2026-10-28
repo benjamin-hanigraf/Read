@@ -34,6 +34,7 @@ for k, (name, nch, cap) in enumerate(BOOKS):
             for line in b.get("lines", []):
                 for sp in line["spans"]:
                     t, size, font = sp["text"], sp["size"], sp["font"]
+                    if sp["bbox"][1] < 0: continue  # the cut-off bottoms of the previous page's last line spill above the top edge
                     if "Bold" in font and abs(size - 14.4) < 0.5 and t.strip().isdigit() and nch > 1:
                         c, v = int(t), 1
                     elif "Bold" in font and abs(size - 9.0) < 0.5 and t.strip().isdigit():
