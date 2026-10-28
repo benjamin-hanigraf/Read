@@ -2,7 +2,7 @@
 """Usage: python3 scripts/build-esv.py "ESV Bible.pdf" [out.json]
 
 Extracts the verse text from the ESV PDF (needs `pip install pymupdf`) and writes
-public/data/en.json as { "Genesis": [ ["verse 1", "verse 2", ...], ...chapters ], ... }.
+data-src/en.json as { "Genesis": [ ["verse 1", "verse 2", ...], ...chapters ], ... }.
 Dropped: front matter, section headings, psalm titles, footnotes and footnote markers; also tidied: apostrophes, line-break hyphens,
 and the opening quote marks the ESV repeats at each paragraph of a long speech.
 """
@@ -12,7 +12,7 @@ import pymupdf
 BOOKS = [("Genesis", 50, "GENESIS"), ("Exodus", 40, "EXODUS"), ("Leviticus", 27, "LEVITICUS"), ("Numbers", 36, "NUMBERS"), ("Deuteronomy", 34, "DEUTERONOMY"), ("Joshua", 24, "JOSHUA"), ("Judges", 21, "JUDGES"), ("Ruth", 4, "RUTH"), ("1 Samuel", 31, "1 SAMUEL"), ("2 Samuel", 24, "2 SAMUEL"), ("1 Kings", 22, "1 KINGS"), ("2 Kings", 25, "2 KINGS"), ("1 Chronicles", 29, "1 CHRONICLES"), ("2 Chronicles", 36, "2 CHRONICLES"), ("Ezra", 10, "EZRA"), ("Nehemiah", 13, "NEHEMIAH"), ("Esther", 10, "ESTHER"), ("Job", 42, "JOB"), ("Psalm", 150, "PSALMS"), ("Proverbs", 31, "PROVERBS"), ("Ecclesiastes", 12, "ECCLESIASTES"), ("Song of Solomon", 8, "SONG OF SOLOMON"), ("Isaiah", 66, "ISAIAH"), ("Jeremiah", 52, "JEREMIAH"), ("Lamentations", 5, "LAMENTATIONS"), ("Ezekiel", 48, "EZEKIEL"), ("Daniel", 12, "DANIEL"), ("Hosea", 14, "HOSEA"), ("Joel", 3, "JOEL"), ("Amos", 9, "AMOS"), ("Obadiah", 1, "OBADIAH"), ("Jonah", 4, "JONAH"), ("Micah", 7, "MICAH"), ("Nahum", 3, "NAHUM"), ("Habakkuk", 3, "HABAKKUK"), ("Zephaniah", 3, "ZEPHANIAH"), ("Haggai", 2, "HAGGAI"), ("Zechariah", 14, "ZECHARIAH"), ("Malachi", 4, "MALACHI"), ("Matthew", 28, "MATTHEW"), ("Mark", 16, "MARK"), ("Luke", 24, "LUKE"), ("John", 21, "JOHN"), ("Acts", 28, "ACTS"), ("Romans", 16, "ROMANS"), ("1 Corinthians", 16, "1 CORINTHIANS"), ("2 Corinthians", 13, "2 CORINTHIANS"), ("Galatians", 6, "GALATIANS"), ("Ephesians", 6, "EPHESIANS"), ("Philippians", 4, "PHILIPPIANS"), ("Colossians", 4, "COLOSSIANS"), ("1 Thessalonians", 5, "1 THESSALONIANS"), ("2 Thessalonians", 3, "2 THESSALONIANS"), ("1 Timothy", 6, "1 TIMOTHY"), ("2 Timothy", 4, "2 TIMOTHY"), ("Titus", 3, "TITUS"), ("Philemon", 1, "PHILEMON"), ("Hebrews", 13, "HEBREWS"), ("James", 5, "JAMES"), ("1 Peter", 5, "1 PETER"), ("2 Peter", 3, "2 PETER"), ("1 John", 5, "1 JOHN"), ("2 John", 1, "2 JOHN"), ("3 John", 1, "3 JOHN"), ("Jude", 1, "JUDE"), ("Revelation", 22, "REVELATION")]
 
 pdf = sys.argv[1]
-out = sys.argv[2] if len(sys.argv) > 2 else "public/data/en.json"
+out = sys.argv[2] if len(sys.argv) > 2 else "data-src/en.json"
 doc = pymupdf.open(pdf)
 first = lambda i: next((l.strip() for l in doc[i].get_text().split("\n") if l.strip()), "")
 foot = [i for i in range(len(doc)) if first(i) == "Footnotes"]

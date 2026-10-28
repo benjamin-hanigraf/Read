@@ -33,11 +33,18 @@ npm run preview    # serve the production build locally
 
 ## Bible data
 
-Both Bibles are loaded once at startup (`src/data/bible.js`) and cached by the service worker for offline use.
-Format: `{ "Genesis": [ ["verse 1", "verse 2", ...], ...chapters ], ... }` (about 1.2 MB and 1.5 MB gzipped).
+The app downloads two small files, `public/data/en.bin` (0.9 MB) and `public/data/ta.bin` (1.2 MB), once, and keeps them
+for offline use (2.3 MB for the whole app). They are loaded in the background after the app opens (English first). Each
+language stays in memory as a single text plus a table of verse positions; a chapter is cut out when it is shown and
+search scans the text directly, so nothing is expanded into per-verse objects.
 
-- **English (ESV):** `public/data/en.json`, extracted from the ESV PDF with fonts used to drop section headings,
-  psalm titles, footnotes and footnote markers: `pip install pymupdf && python3 scripts/build-esv.py "ESV Bible.pdf"`.
-  It needs `public/data/ta.json` present, to avoid mistaking figures such as "120,000" for verse numbers.
-- **Tamil:** `public/data/ta.json`, from the Tamil Bible SQLite file (Tamil letters shifted to 2-byte characters to
-  save space): `node scripts/build-tamil.mjs path/to/tamil_bible_new.sqlite` (Node 22+).
+How they are made (only needed when the Bible text changes):
+
+1. `pip install pymupdf && python3 scripts/build-esv.py "ESV Bible.pdf"` writes `data-src/en.json` (verse text only:
+   headings, footnotes, psalm titles removed; repeated paragraph-opening quotes, line-break hyphens and apostrophes tidied).
+   It needs `data-src/ta.json` to exist.
+2. `node scripts/build-tamil.mjs path/to/tamil_bible_new.sqlite` (Node 22+) writes `data-src/ta.json`.
+3. `pip install zopfli && python3 scripts/pack-bible.py` writes the two `.bin` files and verifies a full round trip.
+   English: words numbered by frequency. Tamil: one byte per character (61 distinct). Both gzipped with zopfli.
+
+`src/data/pack.js` decodes them (native `DecompressionStream`, with `fflate` as the fallback for older browsers).

@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.png", "apple-touch-icon.png"],
       workbox: {
-        // Precache the app shell and the Bible data so Read works fully offline.
-        globPatterns: ["**/*.{js,css,html,png,svg,json,webp}"],
+        // Precache the app shell and the (compressed) Bible data so Read works fully offline.
+        globPatterns: ["**/*.{js,css,html,png,svg,json,webp,bin}"],
         maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
         navigateFallback: "/index.html",
       },

@@ -2,21 +2,18 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, useReducer } fro
 
 import { ARTS } from "./data/arts.js";
 import { TA_NAMES } from "./data/names.js";
+import { ACCENT, accentA } from "./theme.js";
+import { OT, WIS, NT, BOOKS } from "./data/books.js";
+import { CH, searchBible, useBible, bibleReady, bibleFailed } from "./data/bible.js";
 
-const OT=[["Genesis",50],["Exodus",40],["Leviticus",27],["Numbers",36],["Deuteronomy",34],["Joshua",24],["Judges",21],["Ruth",4],["1 Samuel",31],["2 Samuel",24],["1 Kings",22],["2 Kings",25],["1 Chronicles",29],["2 Chronicles",36],["Ezra",10],["Nehemiah",13],["Esther",10],["Job",42],["Ecclesiastes",12],["Song of Solomon",8],["Isaiah",66],["Jeremiah",52],["Lamentations",5],["Ezekiel",48],["Daniel",12],["Hosea",14],["Joel",3],["Amos",9],["Obadiah",1],["Jonah",4],["Micah",7],["Nahum",3],["Habakkuk",3],["Zephaniah",3],["Haggai",2],["Zechariah",14],["Malachi",4]];
-const WIS=[["Psalm",150],["Proverbs",31]];
-const NT=[["Matthew",28],["Mark",16],["Luke",24],["John",21],["Acts",28],["Romans",16],["1 Corinthians",16],["2 Corinthians",13],["Galatians",6],["Ephesians",6],["Philippians",4],["Colossians",4],["1 Thessalonians",5],["2 Thessalonians",3],["1 Timothy",6],["2 Timothy",4],["Titus",3],["Philemon",1],["Hebrews",13],["James",5],["1 Peter",5],["2 Peter",3],["1 John",5],["2 John",1],["3 John",1],["Jude",1],["Revelation",22]];
 const flat = a => a.flatMap(([b, n]) => Array.from({ length: n }, (_, i) => [b, i + 1]));
 const TR = [["Old Testament", flat(OT)], ["Psalms & Proverbs", flat(WIS)], ["New Testament", flat(NT)]];
 const R = 312; // reading days: 6 per week, every 7th day is catch-up
 const TOTAL = 1189;
-const BOOKS = [...OT.slice(0, 18), ...WIS, ...OT.slice(18), ...NT]; // canonical order
 const ALL = flat(BOOKS);
 const nm = (b, lang) => (lang === "ta" ? TA_NAMES[BOOKS.findIndex(([x]) => x === b)] : b);
 const disp = (b, lang) => (lang === "ta" ? nm(b, "ta") : b === "Psalm" ? "Psalms" : b);
 const label = (c, lang) => { if (!c.length) return "Rest"; const [b1, n1] = c[0], [b2, n2] = c[c.length - 1]; const f = b => nm(b, lang); return b1 === b2 ? (n1 === n2 ? `${f(b1)} ${n1}` : `${f(b1)} ${n1}–${n2}`) : `${f(b1)} ${n1} – ${f(b2)} ${n2}`; };
-import { ACCENT, accentA } from "./theme.js";
-import { CH, VERSES, useBible, bibleReady, bibleFailed, taIn, taOut } from "./data/bible.js";
 const LANGS = ["en", "ta", "both"];
 const LANG_LABEL = { en: "A", ta: "அ", both: "Aஅ" };
 const taFont = "'Noto Serif Tamil', 'Noto Sans Tamil', 'Tamil MN', 'Tamil Sangam MN', 'Nirmala UI', 'Latha', serif";
@@ -345,14 +342,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   const m = s.match(/^(\d?\s*[a-z][a-z ]*?)\s*(\d+)(?::(\d+))?$/i);
   let target = null;
   if (m) { const k = norm(m[1]); const f = BOOKS.find(([b]) => norm(b).startsWith(k) || k === norm(b) + "s"); if (f && +m[2] >= 1 && +m[2] <= f[1]) target = { b: f[0], n: +m[2], v: m[3] ? +m[3] : undefined }; }
-  const sl = s.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"');  // curly and straight quotes match each other
-  const { hits, total } = useMemo(() => {
-    const o = []; let t = 0;
-    if (s.length < 2 || target) return { hits: o, total: 0 };
-    const st = taIn(s);
-    for (const x of VERSES) { if ((lang !== "ta" && x.lo.includes(sl)) || (lang !== "en" && x.ta.includes(st))) { t++; if (o.length < 60) o.push({ ...x, ta: taOut(x.ta) }); } }
-    return { hits: o, total: t };
-  }, [s, !!target, lang, ver]);
+  const { hits, total } = useMemo(() => (s.length < 2 || target ? { hits: [], total: 0 } : searchBible(s, lang)), [s, !!target, lang, ver]);
   const mark = tx => tx.split(new RegExp("(" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, "[\"\u201c\u201d]") + ")", "i")).map((p, i) => i % 2 ? <mark key={i} style={{ background: accentA(.35), color: C.text, borderRadius: 3 }}>{p}</mark> : p);
   const lines = (x, hl) => [lang !== "ta" && x.en ? ["en", x.en] : null, lang !== "en" && x.ta ? ["ta", x.ta] : null].filter(Boolean).map(([l, tx]) => <div key={l} lang={l} style={{ fontFamily: l === "ta" ? taFont : serif, fontSize: l === "ta" ? 15 : 16, lineHeight: 1.55, marginTop: l === "ta" && lang === "both" ? 4 : 0, color: l === "ta" && lang === "both" ? "#c7c7cc" : C.text }}>{hl ? mark(tx) : tx}</div>);
   const group = (title, list, off) => (
