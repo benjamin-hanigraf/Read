@@ -1,4 +1,5 @@
 import { memo, useState, useEffect, useLayoutEffect, useRef, useMemo, useReducer } from "react";
+import { flushSync } from "react-dom";
 
 import { ARTS } from "./data/arts.js";
 import { TA_NAMES } from "./data/names.js";
@@ -224,32 +225,35 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   useLayoutEffect(() => {
     const a = anchor.current; anchor.current = null; pend.current = false;
     const scr = sc.current; if (!a || !scr) return;
-    const el = scr.querySelector(`[data-key="${a.key}"]`);
+    const el = scr.querySelector(`[data-vk="${a.key}"]`);
     if (el) scr.scrollTop += el.getBoundingClientRect().top - a.top;
   }, [list]);
   useLayoutEffect(() => { if (!touched.current) place(); }, [list]);  // e.g. a short chapter: more text below lets it sit at the top
   useEffect(() => {
     const el = sc.current; if (!el) return;
-    // Moving the scroll position while a fling is still running stops the fling on iOS and makes the text jump. So during a
-    // fling chapters are only ever added BELOW you (nothing above moves, nothing needs correcting); adding chapters above,
-    // and dropping old ones, wait until scrolling has stopped. (EDGE: you are about to hit the top, so add above at once.)
-    const MAXHARD = 60, AHEAD = 4500, EDGE = 600;  // keep AHEAD px of text loaded above and below; chapters farther than 2 x AHEAD are dropped
-    const keep = () => { const top = el.getBoundingClientRect().top, x = [...el.querySelectorAll("[data-sec]")].find(q => q.getBoundingClientRect().bottom > top + 1); anchor.current = x ? { key: x.getAttribute("data-key"), top: x.getBoundingClientRect().top } : null; };
+    // Setting the scroll position while a finger or a fling is moving it overwrites where the scroll really is, and the text
+    // jumps by whatever distance was covered meanwhile. So while moving, chapters are only ever added BELOW you (nothing above
+    // changes, nothing needs correcting); adding chapters above and dropping old ones wait until scrolling has fully stopped.
+    const MAXHARD = 60, AHEAD = 4500, ABOVE = 9000;  // more is kept above than below, because text above can only be added once you have stopped  // keep AHEAD px of text loaded above and below; chapters farther than 2 x AHEAD are dropped
+    // The anchor is the first verse still on screen. The new list is drawn in the same call (flushSync), so nothing scrolls between measuring and correcting.
+    const keep = () => { const top = el.getBoundingClientRect().top, x = [...el.querySelectorAll("[data-vk]")].find(q => q.getBoundingClientRect().bottom > top + 1); anchor.current = x ? { key: x.getAttribute("data-vk"), top: x.getBoundingClientRect().top } : null; };
+    const swap = l => { pend.current = true; keep(); flushSync(() => setList(l)); };
     const grow = resting => {
-      if (!browse || !bibleReady(lang) || pend.current || (resting && touching.current)) return;  // nothing above you changes while a finger is down
+      if (!browse || !bibleReady(lang) || pend.current || (resting && (touching.current || el.scrollTop !== lastTop))) return;  // nothing above you changes while a finger is down or the text is still moving
       const first = idxOf(list[0]), last = idxOf(list[list.length - 1]), toTop = el.scrollTop, toEnd = el.scrollHeight - el.scrollTop - el.clientHeight;
       if (toEnd < AHEAD && last < ALL.length - 1 && list.length < MAXHARD) { pend.current = true; setList([...list, ...ALL.slice(last + 1, last + 3)]); }
-      else if (first > 0 && (toTop < EDGE || (resting && toTop < AHEAD))) { pend.current = true; keep(); setList([...ALL.slice(Math.max(0, first - 4), first), ...list]); }  // 4 at a time: fewer corrections
+      else if (first > 0 && (resting && toTop < ABOVE)) swap([...ALL.slice(Math.max(0, first - 4), first), ...list]);  // 4 at a time: fewer corrections
       else if (resting) {  // drop chapters that are far beyond the loaded margin (nothing near you moves)
         const er = el.getBoundingClientRect(), secs = [...el.querySelectorAll("[data-sec]")], at = x => { const r = x.getBoundingClientRect(); return [r.top - er.top + el.scrollTop, r.bottom - er.top + el.scrollTop]; };
         let d0 = 0, d1 = 0;
-        while (d0 < secs.length - 1 && at(secs[d0])[1] < el.scrollTop - 2 * AHEAD) d0++;
+        while (d0 < secs.length - 1 && at(secs[d0])[1] < el.scrollTop - 2 * ABOVE) d0++;
         while (d1 < secs.length - 1 - d0 && at(secs[secs.length - 1 - d1])[0] > el.scrollTop + el.clientHeight + 2 * AHEAD) d1++;
-        if (d0 || d1) { pend.current = true; keep(); setList(list.slice(d0, list.length - d1)); }
+        if (d0 || d1) swap(list.slice(d0, list.length - d1));
       }
     };
-    let idle = 0;
+    let idle = 0, lastTop = -1;
     const upd = () => {
+      lastTop = el.scrollTop;
       if (!touched.current && Math.abs(el.scrollTop - placed.current) > 24) touched.current = true;  // you moved it (touch, wheel, keys, scrollbar...)
       const hb = ref.current.querySelector("[data-hdr]").getBoundingClientRect().bottom, secs = el.querySelectorAll("[data-sec]");
       if (!secs.length) return;
@@ -263,8 +267,8 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
     const wheel = () => { touched.current = true; }, mark = () => { touched.current = true; touching.current = true; }, lift = () => { touching.current = false; clearTimeout(idle); idle = setTimeout(() => grow(true), 200); };
     el.addEventListener("scroll", upd, { passive: true }); el.addEventListener("touchstart", mark, { passive: true }); el.addEventListener("wheel", wheel, { passive: true });
     el.addEventListener("touchend", lift); el.addEventListener("touchcancel", lift);
-    upd();
-    return () => { clearTimeout(idle); touching.current = false; el.removeEventListener("scroll", upd); el.removeEventListener("touchstart", mark); el.removeEventListener("wheel", wheel); el.removeEventListener("touchend", lift); el.removeEventListener("touchcancel", lift); };
+    let dead = false; Promise.resolve().then(() => { if (!dead) upd(); });  // not inside the effect itself: the first look may redraw the list at once
+    return () => { dead = true; clearTimeout(idle); touching.current = false; el.removeEventListener("scroll", upd); el.removeEventListener("touchstart", mark); el.removeEventListener("wheel", wheel); el.removeEventListener("touchend", lift); el.removeEventListener("touchcancel", lift); };
   }, [item, ver, list, lang]);
 
   const say = m => { setToast(m); clearTimeout(tt.current); tt.current = setTimeout(() => setToast(""), 1300); };
@@ -374,7 +378,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
         <div data-ip="1" style={{ position: "absolute", right: 6, top: 0, height: 0, display: "flex", alignItems: "center", color: C.accent, opacity: 0, pointerEvents: "none" }}>{Ico.pen(false)}</div>
         {list.map(([b, n], ci) => {
           const k = b + " " + n, target = k === item.ch[0][0] + " " + item.ch[0][1];  // item.hl belongs to the opened chapter only
-          return <Chapter key={k} b={b} n={n} head={ci > 0} lang={lang} size={size} favs={favs} hls={hls} sel={menu && menu.ck === k ? menu : null} hlV={target ? item.hl : undefined} jumpV={target ? jump : undefined} ver={ver} />;
+          return <Chapter key={k} b={b} n={n} head={browse ? !(b === ALL[0][0] && n === ALL[0][1]) : ci > 0} lang={lang} size={size} favs={favs} hls={hls} sel={menu && menu.ck === k ? menu : null} hlV={target ? item.hl : undefined} jumpV={target ? jump : undefined} ver={ver} />;
         })}
         {!browse && <Pill onClick={advance}>{last ? "Done" : "Next"}</Pill>}
       </div>
