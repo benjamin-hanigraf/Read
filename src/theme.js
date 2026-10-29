@@ -11,4 +11,4 @@ export const TAMIL_DIM = "#c7c7cc";            // the Tamil line under the Engli
 export const DISABLED = "#3a3a3c";             // days outside the plan
 export const SELECTED_DAY = "rgba(255,255,255,.16)";
 export const PLACEHOLDER = "#5a5a5e";          // search bar hint, darker than the usual grey so it is subtler
-export const SEPARATOR = "#262628";          // thin lines between rows of a list that sits straight on the black background
+export const SEPARATOR = "#1b1b1d";          // thin lines between rows of a list that sits straight on the black background

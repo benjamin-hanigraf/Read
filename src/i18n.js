@@ -28,7 +28,7 @@ const UI = {
   goTo: ["Go to", "செல்:"],
   noResults: ["No results for", "முடிவில்லை:"],
   more: ["Show more", "மேலும்"],
-  by: ["Created by Benjamin Hanigraf", "உருவாக்கியவர்: Benjamin Hanigraf"],
+  by: ["Created by Benjamin Hanigraf", "உருவாக்கியவர்: பென்ஜமின் ஹானிகிராஃப்"],
   sub: ["Tamil Bible", "தமிழ் வேதாகமம்"],
   loading: ["Loading…", "ஏற்றுகிறது…"],
   failed: ["Couldn't load the Bible. Check your connection.", "ஏற்ற முடியவில்லை. இணைப்பைச் சரிபார்க்கவும்."],

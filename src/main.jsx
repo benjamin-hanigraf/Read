@@ -33,15 +33,22 @@ const syncGap = () => {
   const seen = Math.max(innerHeight, window.visualViewport ? window.visualViewport.height : 0), g = standalone ? Math.max(screen.width, screen.height) - seen : 0;
   root.style.setProperty("--gap", (g > 8 && g < 80 ? Math.round(g) : 0) + "px");
 };
+// iOS can leave fixed layers drawn at the old size after a turn; changing a layout property for one frame makes it lay everything out again
+const nudge = () => { const r = document.documentElement; r.style.paddingRight = "0.02px"; requestAnimationFrame(() => { r.style.paddingRight = ""; }); };
 let settle = [];
 const turned = () => {
   syncGap(); settle.forEach(clearTimeout);
-  settle = [60, 200, 500, 1000, 1800].map(ms => setTimeout(() => { syncGap(); window.scrollTo(0, 0); }, ms));
+  settle = [60, 200, 500, 1000, 1800].map(ms => setTimeout(() => { syncGap(); window.scrollTo(0, 0); nudge(); window.dispatchEvent(new Event("read:turned")); }, ms));
 };
 syncGap();
 for (const t of ["resize", "orientationchange"]) window.addEventListener(t, turned);
 for (const t of ["pageshow", "focus"]) window.addEventListener(t, syncGap);
 document.addEventListener("visibilitychange", syncGap);
+
+// The page itself must never scroll: a drag that starts anywhere that is not inside something scrollable (a list, the reader, the
+// calendar) is cancelled, so it cannot move the whole page instead of the list under your finger.
+const scrolls = el => { for (; el && el !== document.documentElement; el = el.parentElement) { const o = getComputedStyle(el).overflowY; if ((o === "auto" || o === "scroll") && el.scrollHeight > el.clientHeight + 1) return true; } return false; };
+document.addEventListener("touchmove", e => { if (e.touches.length === 1 && e.cancelable && !scrolls(e.target)) e.preventDefault(); }, { passive: false });
 
 loadBible();
 createRoot(document.getElementById("root")).render(<StrictMode><Boundary><App /></Boundary></StrictMode>);

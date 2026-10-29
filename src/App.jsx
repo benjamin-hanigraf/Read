@@ -16,8 +16,9 @@ const ALL = flat(BOOKS);
 const nm = (b, lang) => (lang === "ta" ? TA_NAMES[BOOKS.findIndex(([x]) => x === b)] : b);
 const READER_TA = { Acts: "அப்போஸ்தலர்", Revelation: "வெளிப்படுத்தல்" };  // shorter Tamil names, used only on the verse reader screen where the full ones get cut off
 const rn = (b, lang) => (lang === "ta" && READER_TA[b]) || nm(b, lang);
+const short = (b, lang) => (lang === "ta" ? rn(b, lang) : disp(b, lang));  // everywhere except the list of books
 const disp = (b, lang) => (lang === "ta" ? nm(b, "ta") : b === "Psalm" ? "Psalms" : b);
-const label = (c, lang) => { if (!c.length) return t(lang, "rest"); const [b1, n1] = c[0], [b2, n2] = c[c.length - 1]; const f = b => nm(b, lang); return b1 === b2 ? (n1 === n2 ? `${f(b1)} ${n1}` : `${f(b1)} ${n1}–${n2}`) : `${f(b1)} ${n1} – ${f(b2)} ${n2}`; };
+const label = (c, lang) => { if (!c.length) return t(lang, "rest"); const [b1, n1] = c[0], [b2, n2] = c[c.length - 1]; const f = b => rn(b, lang); return b1 === b2 ? (n1 === n2 ? `${f(b1)} ${n1}` : `${f(b1)} ${n1}–${n2}`) : `${f(b1)} ${n1} – ${f(b2)} ${n2}`; };
 const LANGS = ["en", "ta", "both"];
 const LANG_LABEL = { en: "A", ta: "அ", both: "Aஅ" };
 const taFont = "'Noto Serif Tamil', 'Noto Sans Tamil', 'Tamil MN', 'Tamil Sangam MN', 'Nirmala UI', 'Latha', serif";
@@ -27,6 +28,7 @@ const sv = (c, f) => <svg width="22" height="22" viewBox="0 0 24 24" fill={f ? "
 const Ico = {
   heart: f => sv(<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z" />, f),
   pen: f => sv(<><path d="M4 20h7" /><path d="M14.5 4.5l5 5L10 19H5v-5z" /></>, f),
+  heartM: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z" /></svg>,
   heartS: () => <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z" /></svg>,
 };
 const useSwipeBack = (ref, cb, active) => {
@@ -70,7 +72,17 @@ const C = { ...NEUTRAL, accent: ACCENT };  // colours live in theme.js
 const RAD = 14;
 // a phone held sideways: short and wide. The layouts below widen, and the Today page splits into two columns
 const LAND = "(orientation: landscape) and (max-height: 500px)";
-const useLand = () => { const [l, setL] = useState(() => matchMedia(LAND).matches); useEffect(() => { const q = matchMedia(LAND), f = () => setL(q.matches); f(); q.addEventListener("change", f); return () => q.removeEventListener("change", f); }, []); return l; };
+const useLand = () => {
+  const [l, setL] = useState(() => matchMedia(LAND).matches);
+  useEffect(() => {
+    // re-read on every kind of "the screen turned" signal (and again once it has settled): a missed change event would leave the
+    // wrong layout on screen
+    const f = () => setL(matchMedia(LAND).matches), q = matchMedia(LAND);
+    q.addEventListener("change", f); for (const e of ["resize", "orientationchange", "read:turned", "pageshow"]) window.addEventListener(e, f); f();
+    return () => { q.removeEventListener("change", f); for (const e of ["resize", "orientationchange", "read:turned", "pageshow"]) window.removeEventListener(e, f); };
+  }, []);
+  return l;
+};
 const GAP = "var(--gap, 0px)";  // how much shorter than the screen the browser says the page is (normally 0, see main.jsx)
 const VH = `calc(100dvh + ${GAP})`;  // the real screen height
 const cl = (min, v, max) => `clamp(${min}px, calc(${v / 100} * ${VH}), ${max}px)`;
@@ -457,7 +469,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   };
   const group = (title, list, off) => (
     <div style={{ marginBottom: 28 }}>
-      <div style={{ color: C.accent, fontSize: lang === "ta" ? 17 : 13, fontWeight: 600, letterSpacing: lang === "ta" ? 0 : 0.6, textTransform: "uppercase", margin: "0 8px 8px" }}>{title}</div>
+      <div style={{ color: C.accent, fontSize: lang === "ta" ? 17 : 13, fontWeight: 600, letterSpacing: lang === "ta" ? 0 : 0.6, textTransform: "uppercase", margin: "0 8px 8px", height: 22, lineHeight: "22px", whiteSpace: "nowrap" }}>{title}</div>
       <div style={{ borderBottom: `1px solid ${SEPARATOR}` }}>
         {list.map(([b, cnt], i) => <div key={b} onClick={() => { if (Date.now() - lp.current.quiet < 600) return; if (cnt === 1) go({ ch: [[b, 1]] }); else setBook(b); }} onContextMenu={e => e.preventDefault()} onTouchStart={cnt > 1 ? e => lpStart(b, e.touches[0].clientX, e.touches[0].clientY) : undefined} onMouseDown={cnt > 1 ? e => { if (e.button === 0) lpStart(b, e.clientX, e.clientY); } : undefined} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 52, boxSizing: "border-box", padding: "0 8px", borderTop: `1px solid ${SEPARATOR}`, cursor: "pointer", fontSize: 17 }}><span>{disp(b, lang)}</span><span style={{ color: C.sub, display: "flex", alignItems: "center", gap: 10 }}>{lang === "both" && <span style={{ fontSize: 15 }}>{TA_NAMES[off + i]}</span>}<Chev /></span></div>)}
       </div>
@@ -477,7 +489,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
       {[...favs].reverse().map((k, i) => { const { b, n, v } = pk(k), d = CH[b + " " + n] || { en: {}, ta: {} }, x = { en: d.en[v] || "", ta: d.ta[v] || "" }; return (
         <div key={k} onClick={() => go({ ch: [[b, n]], hl: v })} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "16px 12px 16px 20px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{disp(b, lang)} {n}:{v}</div>
+            <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{short(b, lang)} {n}:{v}</div>
             {lines(x, false)}
           </div>
           <button onClick={e => { e.stopPropagation(); toggleFav(k); }} aria-label={t(lang, "aUnfav")} style={{ background: "none", border: "none", color: C.accent, padding: 8, display: "flex", cursor: "pointer" }}>{Ico.heart(true)}</button>
@@ -489,7 +501,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
         <button onClick={() => setBook(null)} aria-label={t(lang, "aBack")} style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(28)} /></button>
-        <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0, color: C.accent }}>{disp(book, lang)}</h2>
+        <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0, color: C.accent }}>{short(book, lang)}</h2>
       </div>
       <LangBtn lang={lang} setLang={setLang} />
     </div>
@@ -503,26 +515,26 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   const searching = !!target || s.length > 1;
   const searchBox = (
     <div style={{ position: "relative", marginBottom: land ? 0 : 20, flex: land ? 1 : undefined, minWidth: 0 }}>
-      <input value={q} onChange={e => setQ(e.target.value)} enterKeyHint={target ? "go" : "search"} onKeyDown={e => { if (e.key !== "Enter" || e.nativeEvent.isComposing) return; e.preventDefault(); if (target) go({ ch: [[target.b, target.n]], hl: target.v }); else e.currentTarget.blur(); }} placeholder={t(lang, "search")} style={{ display: "block", width: "100%", boxSizing: "border-box", background: C.card, border: "none", borderRadius: RAD, height: 52, padding: "0 44px 0 16px", color: C.text, fontSize: 17, fontFamily: sans, outline: "none" }} />
+      <input value={q} onChange={e => setQ(e.target.value)} enterKeyHint={target ? "go" : "search"} onKeyDown={e => { if (e.key !== "Enter" || e.nativeEvent.isComposing) return; e.preventDefault(); if (target) go({ ch: [[target.b, target.n]], hl: target.v }); else e.currentTarget.blur(); }} placeholder={t(lang, "search")} style={{ display: "block", width: "100%", boxSizing: "border-box", background: C.card, border: "none", borderRadius: RAD, height: land ? 36 : 52, padding: land ? "0 36px 0 12px" : "0 44px 0 16px", color: C.text, fontSize: land ? 14 : 17, fontFamily: sans, outline: "none" }} />
       {q && <button onClick={() => setQ("")} aria-label={t(lang, "aClear")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", cursor: "pointer", color: C.sub }}><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="currentColor" /><path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke="#2c2c2e" strokeWidth="1.8" strokeLinecap="round" /></svg></button>}
     </div>
   );
-  const favRow = (
-    <div onClick={() => setShowFavs(true)} style={{ border: `0.5px solid ${accentA(.7)}`, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 19px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 17, marginBottom: land ? 0 : 28, width: land ? 180 : undefined, flexShrink: 0 }}>
-          <span style={{ color: C.accent, display: "flex" }}>{Ico.heart(true)}</span><span style={{ flex: 1 }}>{t(lang, "favs")}</span><span style={{ color: C.sub }}>{favs.length}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
-        </div>
+  const favBtn = (
+    <button onClick={() => setShowFavs(true)} aria-label={t(lang, "favs")} style={{ height: 36, flexShrink: 0, boxSizing: "border-box", background: "none", border: `0.5px solid ${accentA(.7)}`, borderRadius: RAD, padding: "0 12px", display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: C.text, fontSize: 14, fontFamily: sans }}>
+      <span style={{ color: C.accent, display: "flex" }}>{Ico.heartM()}</span><span>{favs.length}</span>
+    </button>
   );
   const found = (<>
       {total > 0 && <div style={{ color: C.sub, fontSize: 12, margin: "-10px 4px 14px" }}>{nResults(total, lang)}{total > hits.length ? showingFirst(hits.length, lang) : ""}</div>}
       {target ? (
         <div onClick={() => go({ ch: [[target.b, target.n]], hl: target.v })} style={{ background: C.card, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 20px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: 17 }}>
-          <span style={{ color: C.accent, fontWeight: 600 }}>{t(lang, "goTo")} {disp(target.b, lang)} {target.n}{target.v ? ":" + target.v : ""}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
+          <span style={{ color: C.accent, fontWeight: 600 }}>{t(lang, "goTo")} {short(target.b, lang)} {target.n}{target.v ? ":" + target.v : ""}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
         </div>
       ) : s.length > 1 ? (
         <div>
           {hits.length ? <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
             {hits.map((h, i) => <div key={i} onClick={() => go({ ch: [[h.b, h.n]], hl: h.v })} style={{ padding: "16px 20px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
-              <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{disp(h.b, lang)} {h.n}:{h.v}</div>
+              <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{short(h.b, lang)} {h.n}:{h.v}</div>
               {lines(h, true)}
             </div>)}
           </div> : <div style={{ color: C.sub, textAlign: "center", padding: "32px 0" }}>{t(lang, "noResults")} “{s}”</div>}
@@ -538,26 +550,25 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     {land ? (
       <div key="list" style={{ marginTop: TOP, height: `calc(${VH} - ${NAV} - ${TOP})`, boxSizing: "border-box", padding: `14px ${SIDE_R} 0 ${SIDE_L}`, display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flex: "0 0 auto", marginBottom: 14 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0 }}>{t(lang, "bible")}</h1>
-          {searchBox}{favRow}<LangBtn lang={lang} setLang={setLang} />
+          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0, height: 36, lineHeight: "36px" }}>{t(lang, "bible")}</h1>
+          {searchBox}{favBtn}<LangBtn lang={lang} setLang={setLang} />
         </div>
-        {searching ? <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", paddingBottom: 24 }}>{found}</div> : (
+        {searching ? <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", paddingBottom: 24 }}>{found}</div> : (
           <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 28 }}>
-            <div style={{ overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>{OT}</div>
-            <div style={{ overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>{NT}{byLine}</div>
+            <div style={{ overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", minHeight: 0 }}>{OT}</div>
+            <div style={{ overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", minHeight: 0 }}>{NT}{byLine}</div>
           </div>
         )}
       </div>
     ) : (
-    <div key="list" style={{ marginTop: TOP, height: `calc(${VH} - ${NAV} - ${TOP})`, overflowY: "auto", overflowX: "hidden", boxSizing: "border-box", padding: "28px 24px 32px" }}>  {/* starts below the status bar, so text never scrolls under the clock */}
+    <div key="list" style={{ marginTop: TOP, height: `calc(${VH} - ${NAV} - ${TOP})`, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", boxSizing: "border-box", padding: "28px 24px 32px" }}>  {/* starts below the status bar, so text never scrolls under the clock */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1, margin: 0 }}>{t(lang, "bible")}</h1>
-        <LangBtn lang={lang} setLang={setLang} />
+        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1, margin: 0, height: 48, lineHeight: "48px" }}>{t(lang, "bible")}</h1>
+        <div style={{ display: "flex", gap: 8 }}>{favBtn}<LangBtn lang={lang} setLang={setLang} /></div>
       </div>
-      <div style={{ color: C.sub, fontSize: 13, margin: "0 0 24px" }}>{sub}</div>
+      <div style={{ color: C.sub, fontSize: 13, margin: "0 0 24px", height: 18, lineHeight: "18px" }}>{sub}</div>
       {searchBox}
       {searching ? found : (<>
-        {favRow}
         {OT}{NT}
         {byLine}
       </>)}
