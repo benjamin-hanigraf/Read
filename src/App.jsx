@@ -22,7 +22,7 @@ const LANGS = ["en", "ta", "both"];
 const LANG_LABEL = { en: "A", ta: "அ", both: "Aஅ" };
 const taFont = "'Noto Serif Tamil', 'Noto Sans Tamil', 'Tamil MN', 'Tamil Sangam MN', 'Nirmala UI', 'Latha', serif";
 const pk = k => { const m = k.match(/^(.*) (\d+):(\d+)$/); return { b: m[1], n: +m[2], v: +m[3] }; };
-const CSS = "*{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;scrollbar-width:none;-ms-overflow-style:none}*::-webkit-scrollbar{display:none;width:0;height:0}input,textarea{-webkit-user-select:text;user-select:text}input::placeholder{color:"+PLACEHOLDER+";opacity:1}html,body{scrollbar-width:none}@keyframes wFade{from{opacity:0}to{opacity:1}}@keyframes wInR{from{transform:translateX(56px);opacity:0}to{transform:none;opacity:1}}@keyframes wInL{from{transform:translateX(-56px);opacity:0}to{transform:none;opacity:1}}";
+const CSS = ":root{--nav:61px}@media (orientation:landscape) and (max-height:500px){:root{--nav:40px}}*{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;scrollbar-width:none;-ms-overflow-style:none}*::-webkit-scrollbar{display:none;width:0;height:0}input,textarea{-webkit-user-select:text;user-select:text}input::placeholder{color:"+PLACEHOLDER+";opacity:1}html,body{scrollbar-width:none}@keyframes wFade{from{opacity:0}to{opacity:1}}@keyframes wInR{from{transform:translateX(56px);opacity:0}to{transform:none;opacity:1}}@keyframes wInL{from{transform:translateX(-56px);opacity:0}to{transform:none;opacity:1}}";
 const sv = (c, f) => <svg width="22" height="22" viewBox="0 0 24 24" fill={f ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{c}</svg>;
 const Ico = {
   heart: f => sv(<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z" />, f),
@@ -76,8 +76,8 @@ const VH = `calc(100dvh + ${GAP})`;  // the real screen height
 const cl = (min, v, max) => `clamp(${min}px, calc(${v / 100} * ${VH}), ${max}px)`;
 const ROWH = cl(56, 7.4, 66);
 const ARTH = cl(88, 16, 150);
-const NAV = "calc(61px + min(env(safe-area-inset-bottom, 0px), 20px))";  // height of the bottom bar (the home-indicator space under it is capped at 20px)
-const NAVPAD = "calc(61px + min(env(safe-area-inset-bottom, 0px), 20px) + 24px)";  // bottom padding that keeps content clear of it
+const NAV = "calc(var(--nav) + min(env(safe-area-inset-bottom, 0px), 20px))";  // height of the bottom bar (the home-indicator space under it is capped at 20px)
+const NAVPAD = "calc(var(--nav) + min(env(safe-area-inset-bottom, 0px), 20px) + 24px)";  // bottom padding that keeps content clear of it
 const TOP = "env(safe-area-inset-top, 0px)";
 const FIT = `0 0 calc(${GAP} * -1) 0`;  // inset for a full-screen fixed layer
 const backBtn = { display: "flex", alignItems: "center", background: "none", border: "none", color: C.accent, fontSize: 22, padding: "12px 16px", cursor: "pointer" };
@@ -756,7 +756,7 @@ export default function App() {
       <nav style={{ position: "fixed", bottom: `calc(${GAP} * -1)`, left: 0, right: 0, zIndex: 5, background: C.bg, borderTop: `1px solid ${C.line}`, height: NAV, boxSizing: "border-box", visibility: kb ? "hidden" : "visible" }}>
         <div style={{ maxWidth: 430, margin: "0 auto", display: "flex" }}>
           {[["today", t(lang, "today")], ["bible", t(lang, "bible")]].map(([k, l]) => (
-            <button key={k} onClick={() => { setTab(k); setWeekOff(0); if (k === "today") setView(todayN); }} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "9px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, color: tab === k ? C.accent : C.sub, fontFamily: sans, fontSize: 11, fontWeight: 500 }}>{ICONS[k]}{l}</button>
+            <button key={k} onClick={() => { setTab(k); setWeekOff(0); if (k === "today") setView(todayN); }} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: land ? 0 : "9px 0 8px", display: "flex", flexDirection: land ? "row" : "column", alignItems: "center", justifyContent: land ? "center" : undefined, gap: land ? 8 : 5, height: land ? 40 : undefined, color: tab === k ? C.accent : C.sub, fontFamily: sans, fontSize: 11, fontWeight: 500 }}>{ICONS[k]}{l}</button>
           ))}
         </div>
       </nav>
