@@ -396,9 +396,9 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   const rootRef = useRef(null);
   useSwipeBack(rootRef, () => { if (showFavs) setShowFavs(false); else setBook(null); }, active && (showFavs || !!book));
   const s = q.trim();
-  const m = s.match(/^(\d?\s*[a-z][a-z ]*?)\s*(\d+)(?::(\d+))?$/i);
+  const m = s.match(/^(\d?\s*[\p{L}\p{M}][\p{L}\p{M} ]*?)\s*(\d+)(?::(\d+))?$/iu);
   let target = null;
-  if (m) { const k = norm(m[1]); const f = BOOKS.find(([b]) => norm(b).startsWith(k) || k === norm(b) + "s"); if (f && +m[2] >= 1 && +m[2] <= f[1]) target = { b: f[0], n: +m[2], v: m[3] ? +m[3] : undefined }; }
+  if (m) { const k = norm(m[1]); const f = BOOKS.find(([b], i) => [b, TA_NAMES[i], READER_TA[b] || ""].some(x => norm(x).startsWith(k)) || k === norm(b) + "s"); if (f && +m[2] >= 1 && +m[2] <= f[1]) target = { b: f[0], n: +m[2], v: m[3] ? +m[3] : undefined }; }
   const [limit, setLimit] = useState(60);
   useEffect(() => { setLimit(60); }, [s, lang]);
   const { hits, total } = useMemo(() => (s.length < 2 || target ? { hits: [], total: 0 } : searchBible(s, lang, limit)), [s, !!target, lang, ver, limit]);
