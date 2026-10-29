@@ -68,6 +68,9 @@ const dayItems = n => isCatchUp(n) || readIdx(n) >= R ? [] : [0, 1, 2].map(t => 
 
 const C = { ...NEUTRAL, accent: ACCENT };  // colours live in theme.js
 const RAD = 14;
+// a phone held sideways: short and wide. The layouts below widen, and the Today page splits into two columns
+const LAND = "(orientation: landscape) and (max-height: 500px)";
+const useLand = () => { const [l, setL] = useState(() => matchMedia(LAND).matches); useEffect(() => { const q = matchMedia(LAND), f = () => setL(q.matches); f(); q.addEventListener("change", f); return () => q.removeEventListener("change", f); }, []); return l; };
 const GAP = "var(--gap, 0px)";  // how much shorter than the screen the browser says the page is (normally 0, see main.jsx)
 const VH = `calc(100dvh + ${GAP})`;  // the real screen height
 const cl = (min, v, max) => `clamp(${min}px, calc(${v / 100} * ${VH}), ${max}px)`;
@@ -191,6 +194,7 @@ const Chapter = memo(function Chapter({ b, n, head, lang, size, favs, hls, sel, 
 });
 
 function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, favs, hls, toggleFav, toggleHl }) {
+  const mw = useLand() ? 640 : 430;
   const ver = useBible();
   const ref = useRef(null), sc = useRef(null);  // ref: the whole screen (slides away on swipe-back), sc: the scrolling text under the fixed top bar
   const browse = !item.key;
@@ -359,7 +363,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   return (
     <div ref={ref} style={{ position: "fixed", inset: FIT, background: C.bg, zIndex: 10, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y" }}>
       <div data-hdr="1" style={{ flex: "0 0 auto", background: C.bg }}>
-        <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(10px + ${TOP}) 20px 10px`, display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ maxWidth: mw, margin: "0 auto", padding: `calc(10px + ${TOP}) 20px 10px`, display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
             <button onClick={close} aria-label={t(lang, "aBack")} style={{ ...backBtn, margin: "-12px 0 -12px -22px", padding: "12px 9px 12px 16px" }}><Chev d="left" h={xh(17)} /></button>
             <div style={{ fontFamily: sans, fontSize: 17, fontWeight: 600, color: C.accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(() => { const [tb, tn] = (cur && list.find(([b, n]) => b + " " + n === cur)) || item.ch[0]; return `${rn(tb, lang)} ${tn}`; })()}</div>
@@ -372,7 +376,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
         </div>
       </div>
       <div ref={sc} style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: browse ? "none" : "contain" }}>
-      <div data-cw="1" key={item.ch.map(c => c.join(" ")).join("|")} style={{ position: "relative", maxWidth: 430, margin: "0 auto", padding: browse ? "40px 28px calc(80px + min(env(safe-area-inset-bottom, 0px), 20px))" : "40px 28px calc(40px + min(env(safe-area-inset-bottom, 0px), 20px))" }}>
+      <div data-cw="1" key={item.ch.map(c => c.join(" ")).join("|")} style={{ position: "relative", maxWidth: mw, margin: "0 auto", padding: browse ? "40px 28px calc(80px + min(env(safe-area-inset-bottom, 0px), 20px))" : "40px 28px calc(40px + min(env(safe-area-inset-bottom, 0px), 20px))" }}>
         {/* the two icons shown behind a verse while you swipe it; one pair for the whole page, moved to the verse being swiped */}
         <div data-ih="1" style={{ position: "absolute", left: 6, top: 0, height: 0, display: "flex", alignItems: "center", color: C.accent, opacity: 0, pointerEvents: "none" }}>{Ico.heart(true)}</div>
         <div data-ip="1" style={{ position: "absolute", right: 6, top: 0, height: 0, display: "flex", alignItems: "center", color: C.accent, opacity: 0, pointerEvents: "none" }}>{Ico.pen(false)}</div>
@@ -389,6 +393,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
 }
 
 function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
+  const land = useLand(), mw = land ? 640 : 430;
   const ver = useBible();
   const [q, setQ] = useState("");
   const [book, setBook] = useState(null);
@@ -444,7 +449,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     </div>
   );
   const bookBody = book && (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${land ? 8 : 5}, 1fr)`, gap: 10 }}>
       {Array.from({ length: BOOKS.find(([b]) => b === book)[1] }, (_, i) => <button key={i} onClick={() => go({ ch: [[book, i + 1]] })} style={{ aspectRatio: "1", borderRadius: RAD, border: "none", background: C.card, color: C.text, fontSize: 17, fontFamily: sans, cursor: "pointer" }}>{i + 1}</button>)}
     </div>
   );
@@ -486,9 +491,9 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     </div>
     {(showFavs || book) && (
       <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: `0 0 calc(${NAV} - ${GAP}) 0`, zIndex: 4, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
-        <div style={{ flex: "0 0 auto", maxWidth: 430, width: "100%", margin: "0 auto", boxSizing: "border-box", padding: `calc(28px + ${TOP}) 24px 0` }}>{showFavs ? favsHead : bookHead}</div>
+        <div style={{ flex: "0 0 auto", maxWidth: mw, width: "100%", margin: "0 auto", boxSizing: "border-box", padding: `calc(28px + ${TOP}) 24px 0` }}>{showFavs ? favsHead : bookHead}</div>
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
-          <div style={{ maxWidth: 430, margin: "0 auto", padding: "0 24px 32px" }}>{showFavs ? favsBody : bookBody}</div>
+          <div style={{ maxWidth: mw, margin: "0 auto", padding: "0 24px 32px" }}>{showFavs ? favsBody : bookBody}</div>
         </div>
       </div>
     )}
@@ -497,6 +502,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
 }
 
 function Calendar({ lang, start, today, view, status, pick, close, mark }) {
+  const land = useLand();
   const b = addDays(start, view);
   const [ym, setYm] = useState([b.getFullYear(), b.getMonth()]);
   const [mdir, setMdir] = useState(0);
@@ -534,7 +540,7 @@ function Calendar({ lang, start, today, view, status, pick, close, mark }) {
   const arrow = { background: "none", border: "none", color: C.accent, fontSize: 26, cursor: "pointer", padding: "6px 10px", display: "inline-flex", alignItems: "center", fontSize: 22 };
   return (
     <div ref={rootRef} onTouchStart={e => { sw.current = [e.touches[0].clientX, e.touches[0].clientY]; }} onTouchEnd={e => { const s0 = sw.current; sw.current = null; if (!s0 || s0[0] < 28 || ps.current.on || ps.current.quiet) return; const dx = e.changedTouches[0].clientX - s0[0], dy = e.changedTouches[0].clientY - s0[1]; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1); }} style={{ position: "fixed", inset: FIT, background: C.bg, zIndex: 20, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
-      <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(28px + ${TOP}) 24px calc(60px + min(env(safe-area-inset-bottom, 0px), 20px))` }}>
+      <div style={{ maxWidth: land ? 640 : 430, margin: "0 auto", padding: `calc(28px + ${TOP}) 24px calc(60px + min(env(safe-area-inset-bottom, 0px), 20px))` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "baseline", minWidth: 0 }}>
           <button onClick={close} aria-label={t(lang, "aBack")} style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(30)} /></button>
@@ -639,7 +645,8 @@ export default function App() {
   const toggleHl = k => setHls(h => { const o = { ...h }; if (o[k]) delete o[k]; else o[k] = 1; return o; });
   const toggle = k => setDone(d => ({ ...d, [k]: !d[k] }));
 
-  const shell = { maxWidth: 430, margin: "0 auto", minHeight: "100vh", background: C.bg, color: C.text, fontFamily: sans, padding: `${TOP} 24px ${NAVPAD}`, boxSizing: "border-box", overflowX: "hidden" };
+  const land = useLand();
+  const shell = { maxWidth: land ? (tab === "today" ? 860 : 640) : 430, margin: "0 auto", minHeight: "100vh", background: C.bg, color: C.text, fontFamily: sans, padding: `${TOP} max(24px, env(safe-area-inset-right, 0px)) ${NAVPAD} max(24px, env(safe-area-inset-left, 0px))`, boxSizing: "border-box", overflowX: "hidden" };
 
   if (!start) return (
     <div style={{ ...shell, display: "flex", flexDirection: "column", justifyContent: "center", gap: 48, paddingBottom: 48 }}>
@@ -692,7 +699,8 @@ export default function App() {
     <div style={tab === "today" ? { ...shell, height: VH, minHeight: 0, paddingBottom: 0, overflow: "hidden" } : { ...shell, height: VH, minHeight: 0, padding: 0, overflow: "hidden" }}>
       <style>{CSS}</style>
       {tab === "bible" ? <BibleTab go={setOpen} lang={lang} setLang={setLang} favs={favs} toggleFav={toggleFav} active={!open && !cal} /> : (
-        <div style={{ height: `calc(${VH} - ${NAV} - ${TOP})`, boxSizing: "border-box", paddingTop: 16, display: "flex", flexDirection: "column", gap: cl(14, 2.1, 22), overflow: "hidden" }}>
+        <div style={{ height: `calc(${VH} - ${NAV} - ${TOP})`, boxSizing: "border-box", paddingTop: 16, display: "flex", flexDirection: land ? "row" : "column", gap: land ? 24 : cl(14, 2.1, 22), overflow: "hidden" }}>
+          <div style={land ? { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 10 } : { display: "contents" }}>
           <Art i={artI} onTap={() => setArtTap(k => k + 1)} />
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -708,8 +716,9 @@ export default function App() {
               <WeekStrip off={weekOff} setOff={setWeekOff} build={weekAt} can={canWeek} render={renderWeek} />
             </div>
           </div>
+          </div>
 
-          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div>
                 <div style={{ color: C.sub, fontSize: 13, height: 17, marginBottom: 2 }}>{catchUp ? t(lang, "catchUp") : ""}</div>
