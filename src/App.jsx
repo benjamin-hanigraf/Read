@@ -66,12 +66,15 @@ const dayItems = n => isCatchUp(n) || readIdx(n) >= R ? [] : [0, 1, 2].map(t => 
 
 const C = { ...NEUTRAL, accent: ACCENT };  // colours live in theme.js
 const RAD = 14;
-const cl = (min, v, max) => `clamp(${min}px, ${v}dvh, ${max}px)`;
+const GAP = "var(--gap, 0px)";  // how much shorter than the screen the browser says the page is (normally 0, see main.jsx)
+const VH = `calc(100dvh + ${GAP})`;  // the real screen height
+const cl = (min, v, max) => `clamp(${min}px, calc(${v / 100} * ${VH}), ${max}px)`;
 const ROWH = cl(56, 7.4, 66);
 const ARTH = cl(88, 16, 150);
 const NAV = "calc(61px + min(env(safe-area-inset-bottom, 0px), 20px))";  // height of the bottom bar (the home-indicator space under it is capped at 20px)
 const NAVPAD = "calc(61px + min(env(safe-area-inset-bottom, 0px), 20px) + 24px)";  // bottom padding that keeps content clear of it
 const TOP = "env(safe-area-inset-top, 0px)";
+const FIT = `0 0 calc(${GAP} * -1) 0`;  // inset for a full-screen fixed layer
 const backBtn = { display: "flex", alignItems: "center", background: "none", border: "none", color: C.accent, fontSize: 22, padding: "12px 16px", cursor: "pointer" };
 const sans = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif";
 const serif = "ui-serif, 'New York', Georgia, serif";
@@ -350,7 +353,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
 
   const sec = { background: "none", border: "none", height: 36, padding: 0, cursor: "pointer", color: C.text, fontFamily: sans, display: "flex", alignItems: "center", justifyContent: "center" };
   return (
-    <div ref={ref} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 10, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y" }}>
+    <div ref={ref} style={{ position: "fixed", inset: FIT, background: C.bg, zIndex: 10, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y" }}>
       <div data-hdr="1" style={{ flex: "0 0 auto", background: C.bg }}>
         <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(10px + ${TOP}) 20px 10px`, display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
@@ -376,7 +379,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
         {!browse && <Pill onClick={advance}>{last ? "Done" : "Next"}</Pill>}
       </div>
       </div>
-      {toast && <div style={{ position: "fixed", left: 0, right: 0, bottom: "calc(40px + min(env(safe-area-inset-bottom, 0px), 20px))", display: "flex", justifyContent: "center", zIndex: 31, pointerEvents: "none" }}><div style={{ background: C.card2, color: C.text, fontSize: 14, fontFamily: sans, padding: "9px 16px", borderRadius: RAD }}>{toast}</div></div>}
+      {toast && <div style={{ position: "fixed", left: 0, right: 0, bottom: `calc(40px + min(env(safe-area-inset-bottom, 0px), 20px) - ${GAP})`, display: "flex", justifyContent: "center", zIndex: 31, pointerEvents: "none" }}><div style={{ background: C.card2, color: C.text, fontSize: 14, fontFamily: sans, padding: "9px 16px", borderRadius: RAD }}>{toast}</div></div>}
     </div>
   );
 }
@@ -444,7 +447,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
 
   return (
     <>
-    <div key="list" style={{ marginTop: TOP, height: `calc(100dvh - ${NAV} - ${TOP})`, overflowY: "auto", overflowX: "hidden", boxSizing: "border-box", padding: "28px 24px 32px" }}>  {/* starts below the status bar, so text never scrolls under the clock */}
+    <div key="list" style={{ marginTop: TOP, height: `calc(${VH} - ${NAV} - ${TOP})`, overflowY: "auto", overflowX: "hidden", boxSizing: "border-box", padding: "28px 24px 32px" }}>  {/* starts below the status bar, so text never scrolls under the clock */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1, margin: 0 }}>{lang === "ta" ? "வேதாகமம்" : "Bible"}</h1>
         <LangBtn lang={lang} setLang={setLang} />
@@ -478,7 +481,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
       </>)}
     </div>
     {(showFavs || book) && (
-      <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: `0 0 ${NAV} 0`, zIndex: 4, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
+      <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: `0 0 calc(${NAV} - ${GAP}) 0`, zIndex: 4, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
         <div style={{ flex: "0 0 auto", maxWidth: 430, width: "100%", margin: "0 auto", boxSizing: "border-box", padding: `calc(28px + ${TOP}) 24px 0` }}>{showFavs ? favsHead : bookHead}</div>
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
           <div style={{ maxWidth: 430, margin: "0 auto", padding: "0 24px 32px" }}>{showFavs ? favsBody : bookBody}</div>
@@ -526,7 +529,7 @@ function Calendar({ start, today, view, status, pick, close, mark }) {
   const sw = useRef(null);
   const arrow = { background: "none", border: "none", color: C.accent, fontSize: 26, cursor: "pointer", padding: "6px 10px", display: "inline-flex", alignItems: "center", fontSize: 22 };
   return (
-    <div ref={rootRef} onTouchStart={e => { sw.current = [e.touches[0].clientX, e.touches[0].clientY]; }} onTouchEnd={e => { const s0 = sw.current; sw.current = null; if (!s0 || s0[0] < 28 || ps.current.on || ps.current.quiet) return; const dx = e.changedTouches[0].clientX - s0[0], dy = e.changedTouches[0].clientY - s0[1]; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1); }} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 20, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
+    <div ref={rootRef} onTouchStart={e => { sw.current = [e.touches[0].clientX, e.touches[0].clientY]; }} onTouchEnd={e => { const s0 = sw.current; sw.current = null; if (!s0 || s0[0] < 28 || ps.current.on || ps.current.quiet) return; const dx = e.changedTouches[0].clientX - s0[0], dy = e.changedTouches[0].clientY - s0[1]; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1); }} style={{ position: "fixed", inset: FIT, background: C.bg, zIndex: 20, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
       <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(28px + ${TOP}) 24px calc(60px + min(env(safe-area-inset-bottom, 0px), 20px))` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "baseline", minWidth: 0 }}>
@@ -682,10 +685,10 @@ export default function App() {
   ));
 
   return (
-    <div style={tab === "today" ? { ...shell, height: "100dvh", minHeight: 0, paddingBottom: 0, overflow: "hidden" } : { ...shell, height: "100dvh", minHeight: 0, padding: 0, overflow: "hidden" }}>
+    <div style={tab === "today" ? { ...shell, height: VH, minHeight: 0, paddingBottom: 0, overflow: "hidden" } : { ...shell, height: VH, minHeight: 0, padding: 0, overflow: "hidden" }}>
       <style>{CSS}</style>
       {tab === "bible" ? <BibleTab go={setOpen} lang={lang} setLang={setLang} favs={favs} toggleFav={toggleFav} active={!open && !cal} /> : (
-        <div style={{ height: `calc(100dvh - ${NAV} - ${TOP})`, boxSizing: "border-box", paddingTop: 16, display: "flex", flexDirection: "column", gap: cl(14, 2.1, 22), overflow: "hidden" }}>
+        <div style={{ height: `calc(${VH} - ${NAV} - ${TOP})`, boxSizing: "border-box", paddingTop: 16, display: "flex", flexDirection: "column", gap: cl(14, 2.1, 22), overflow: "hidden" }}>
           <Art i={artI} onTap={() => setArtTap(k => k + 1)} />
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -737,7 +740,7 @@ export default function App() {
         </div>
       )}
 
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 5, background: C.bg, borderTop: `1px solid ${C.line}`, height: NAV, boxSizing: "border-box", visibility: kb ? "hidden" : "visible" }}>
+      <nav style={{ position: "fixed", bottom: `calc(${GAP} * -1)`, left: 0, right: 0, zIndex: 5, background: C.bg, borderTop: `1px solid ${C.line}`, height: NAV, boxSizing: "border-box", visibility: kb ? "hidden" : "visible" }}>
         <div style={{ maxWidth: 430, margin: "0 auto", display: "flex" }}>
           {[["today", "Today"], ["bible", "Bible"]].map(([k, l]) => (
             <button key={k} onClick={() => { setTab(k); setWeekOff(0); if (k === "today") setView(todayN); }} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "9px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, color: tab === k ? C.accent : C.sub, fontFamily: sans, fontSize: 11, fontWeight: 500 }}>{ICONS[k]}{l}</button>
