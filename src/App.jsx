@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, useReducer } fro
 
 import { ARTS } from "./data/arts.js";
 import { TA_NAMES } from "./data/names.js";
-import { ACCENT, accentA } from "./theme.js";
+import { ACCENT, WHITE, BLACK, GREY_DARK, GREY_LIGHT, SELECT, HIGHLIGHT } from "./theme.js";
 import { OT, WIS, NT, BOOKS } from "./data/books.js";
 import { CH, searchBible, useBible, bibleReady, bibleFailed } from "./data/bible.js";
 
@@ -18,12 +18,12 @@ const LANGS = ["en", "ta", "both"];
 const LANG_LABEL = { en: "A", ta: "அ", both: "Aஅ" };
 const taFont = "'Noto Serif Tamil', 'Noto Sans Tamil', 'Tamil MN', 'Tamil Sangam MN', 'Nirmala UI', 'Latha', serif";
 const pk = k => { const m = k.match(/^(.*) (\d+):(\d+)$/); return { b: m[1], n: +m[2], v: +m[3] }; };
-const CSS = "*{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;scrollbar-width:none;-ms-overflow-style:none}*::-webkit-scrollbar{display:none;width:0;height:0}input,textarea{-webkit-user-select:text;user-select:text}html,body{scrollbar-width:none}@keyframes wFade{from{opacity:0}to{opacity:1}}@keyframes wInR{from{transform:translateX(56px);opacity:0}to{transform:none;opacity:1}}@keyframes wInL{from{transform:translateX(-56px);opacity:0}to{transform:none;opacity:1}}";
+const CSS = "*{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;scrollbar-width:none;-ms-overflow-style:none}*::-webkit-scrollbar{display:none;width:0;height:0}input,textarea{-webkit-user-select:text;user-select:text}input::placeholder{color:"+BLACK+";opacity:1}html,body{scrollbar-width:none}@keyframes wFade{from{opacity:0}to{opacity:1}}@keyframes wInR{from{transform:translateX(56px);opacity:0}to{transform:none;opacity:1}}@keyframes wInL{from{transform:translateX(-56px);opacity:0}to{transform:none;opacity:1}}";
 const sv = (c, f) => <svg width="22" height="22" viewBox="0 0 24 24" fill={f ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{c}</svg>;
 const Ico = {
   heart: f => sv(<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z" />, f),
   pen: f => sv(<><path d="M4 20h7" /><path d="M14.5 4.5l5 5L10 19H5v-5z" /></>, f),
-  copy: () => sv(<><rect x="9" y="9" width="11" height="11" rx="2.5" /><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15" /></>),
+  heartS: () => <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z" /></svg>,
 };
 const useSwipeBack = (ref, cb, active) => {
   const f = useRef(cb); f.current = cb;
@@ -53,7 +53,6 @@ const useSwipeBack = (ref, cb, active) => {
   }, [active]);
 };
 const copyText = async s => { try { await navigator.clipboard.writeText(s); } catch { try { const a = document.createElement("textarea"); a.value = s; a.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(a); a.select(); document.execCommand("copy"); a.remove(); } catch {} } };
-const spread = (x, y) => { const R = 76, cx = Math.min(Math.max(x, 104), window.innerWidth - 104), A = y > 200 ? [-150, -90, -30] : [150, 90, 30]; return A.map(a => [cx + R * Math.cos(a * Math.PI / 180), y + R * Math.sin(a * Math.PI / 180)]); };
 const norm = s => s.toLowerCase().replace(/\s+/g, "");
 
 const chaptersFor = (t, r) => { const N = TR[t][1].length; return TR[t][1].slice(Math.round(r * N / R), Math.round((r + 1) * N / R)); };
@@ -64,7 +63,7 @@ const planLens = {};
 const planLen = () => planLens[plan.dow] ??= (() => { let n = 0; while (isCatchUp(n) || readIdx(n) < R) n++; return n; })();
 const dayItems = n => isCatchUp(n) || readIdx(n) >= R ? [] : [0, 1, 2].map(t => ({ key: `${n}:${t}`, n, t, ch: chaptersFor(t, readIdx(n)) })).filter(i => i.ch.length);
 
-const C = { bg: "#000", card: "#1c1c1e", card2: "#2c2c2e", text: "#f5f5f7", sub: "#8e8e93", line: "#38383a", accent: ACCENT };
+const C = { bg: BLACK, text: WHITE, card: GREY_DARK, grey: GREY_LIGHT, accent: ACCENT, select: SELECT, hl: HIGHLIGHT };  // the seven colours, see theme.js
 const RAD = 14;
 const cl = (min, v, max) => `clamp(${min}px, ${v}dvh, ${max}px)`;
 const ROWH = cl(56, 7.4, 66);
@@ -104,12 +103,12 @@ const dayDiff = (a, b) => Math.round((new Date(a + "T00:00") - new Date(b + "T00
 const addDays = (s, k) => { const d = new Date(s + "T00:00"); d.setDate(d.getDate() + k); return d; };
 
 const Pill = ({ children, onClick, disabled, ghost }) => (
-  <button onClick={onClick} disabled={disabled} style={{ width: "100%", padding: `${cl(14, 1.9, 17)} 0`, borderRadius: RAD, border: "none", fontSize: 16, fontWeight: 600, fontFamily: sans, cursor: disabled ? "default" : "pointer", background: ghost ? C.card2 : disabled ? C.card2 : C.accent, color: ghost ? C.text : disabled ? C.sub : "#fff" }}>{children}</button>
+  <button onClick={onClick} disabled={disabled} style={{ width: "100%", padding: `${cl(14, 1.9, 17)} 0`, borderRadius: RAD, border: "none", fontSize: 16, fontWeight: 600, fontFamily: sans, cursor: disabled ? "default" : "pointer", background: ghost ? C.card : disabled ? C.card : C.accent, color: ghost ? C.text : C.text }}>{children}</button>
 );
 
 const Check = ({ on, onClick }) => (
   <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label="Mark as read" aria-pressed={on} style={{ background: "none", border: "none", padding: 11, margin: -11, cursor: "pointer", flexShrink: 0, display: "flex" }}>
-    <span style={{ width: 18, height: 18, borderRadius: 9, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", border: on ? "none" : `1.5px solid ${C.line}`, background: on ? C.accent : "transparent", color: "#fff", fontSize: 11, fontWeight: 700, transition: "background .2s" }}>{on ? "✓" : ""}</span>
+    <span style={{ width: 18, height: 18, borderRadius: 9, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", border: on ? "none" : `1.5px solid ${C.bg}`, background: on ? C.accent : "transparent", color: C.text, fontSize: 11, fontWeight: 700, transition: "background .2s" }}>{on ? "✓" : ""}</span>
   </button>
 );
 
@@ -130,7 +129,7 @@ function Art({ i, onTap }) {
   return (
     <div onClick={onTap} style={{ flex: "0 0 auto", height: ARTH, position: "relative" }} aria-hidden="true">
       <svg key={i} viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", animation: "wFade .4s ease" }}>
-        {a.els.map(([d, o], k) => <path key={k} d={d} opacity={o} fill="none" stroke={C.accent} strokeWidth="1.2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />)}
+        {a.els.map(([d, o], k) => <path key={k} d={d} fill="none" stroke={o >= 0.75 ? C.accent : o >= 0.4 ? C.select : C.hl} strokeWidth="1.2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />)}  {/* the dimmer strokes use the two darker accent shades */}
       </svg>
     </div>
   );
@@ -140,14 +139,14 @@ function Ring({ v }) {
   const r = 22, c = 2 * Math.PI * r;
   return (
     <svg viewBox="0 0 56 56" style={{ width: cl(36, 5, 44), height: cl(36, 5, 44), flexShrink: 0 }}>
-      <circle cx="28" cy="28" r={r} fill="none" stroke={C.card2} strokeWidth="5" />
+      <circle cx="28" cy="28" r={r} fill="none" stroke={C.card} strokeWidth="5" />
       <circle cx="28" cy="28" r={r} fill="none" stroke={C.accent} strokeWidth="5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - v)} transform="rotate(-90 28 28)" style={{ transition: "stroke-dashoffset .5s ease" }} />
     </svg>
   );
 }
 
 const LangLabel = ({ l }) => (
-  <span style={{ display: "flex", alignItems: "baseline", gap: 1, lineHeight: 1 }}>
+  <span style={{ display: "flex", alignItems: "baseline", gap: 1, lineHeight: 1, color: C.accent }}>
     {l !== "ta" && <span style={{ fontFamily: sans, fontSize: l === "both" ? 15 : 17, fontWeight: 600 }}>A</span>}
     {l !== "en" && <span style={{ fontFamily: taFont, fontSize: l === "both" ? 17 : 19, fontWeight: 600 }}>அ</span>}
   </span>
@@ -167,21 +166,22 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   const [ext, setExt] = useState({ item, list: first });
   const list = ext.item === item ? ext.list : first;
   const setList = l => setExt({ item, list: l });
-  const anchor = useRef(null), pend = useRef(false), touched = useRef(false), lastTop = useRef(0);
+  const anchor = useRef(null), pend = useRef(false), touched = useRef(false), placed = useRef(0);  // placed: where the opening position put the scroll
   const [menu, setMenu] = useState(null);
   const [toast, setToast] = useState("");
   const [jump, setJump] = useState(item.hl);
-  const tt = useRef(0), act = useRef({}), lpOn = useRef(false), mref = useRef(null);
+  const tt = useRef(0), act = useRef({}), mref = useRef(null);
   act.current = { favs, hls, toggleFav, toggleHl, lang };
   const setM = m => { mref.current = m; setMenu(m); };
   useSwipeBack(ref, close, true);
   const place = () => {
     const scr = sc.current; if (!scr) return;
     const hl = scr.querySelector("[data-hl]");
-    if (hl) { hl.scrollIntoView({ block: "center" }); return; }
+    if (hl) { hl.scrollIntoView({ block: "center" }); placed.current = scr.scrollTop; return; }
     const t = browse && idxOf(item.ch[0]) > 0 && scr.querySelector(`[data-vs="${item.ch[0][0]} ${item.ch[0][1]}"]`);
     if (t) scr.scrollTop += t.getBoundingClientRect().top - (ref.current.querySelector("[data-hdr]").getBoundingClientRect().bottom + 12);  // opened chapter just under the bar with its head tucked behind it; the previous chapter is above
     else scr.scrollTop = 0;
+    placed.current = scr.scrollTop;
   };
   useEffect(() => { touched.current = false; setCur(null); setM(null); place(); }, [item]);
   useEffect(() => { if (!touched.current) place(); }, [ver]);  // text arrived after opening: settle again
@@ -193,91 +193,129 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
     const el = scr.querySelector(`[data-key="${a.key}"]`);
     if (el) scr.scrollTop += el.getBoundingClientRect().top - a.top;
   }, [list]);
+  useLayoutEffect(() => { if (!touched.current) place(); }, [list]);  // e.g. a short chapter: more text below lets it sit at the top
   useEffect(() => {
     const el = sc.current; if (!el) return;
-    const MAXN = 7, NEAR = 1200;
+    // Moving the scroll position while a fling is still running stops the fling on iOS and makes the text jump. So during a
+    // fling chapters are only ever added BELOW you (nothing above moves, nothing needs correcting); adding chapters above,
+    // and dropping old ones, wait until scrolling has stopped. (EDGE: you are about to hit the top, so add above at once.)
+    const MAXHARD = 60, AHEAD = 4500, EDGE = 600;  // keep AHEAD px of text loaded above and below; chapters farther than 2 x AHEAD are dropped
     const keep = () => { const top = el.getBoundingClientRect().top, x = [...el.querySelectorAll("[data-sec]")].find(q => q.getBoundingClientRect().bottom > top + 1); anchor.current = x ? { key: x.getAttribute("data-key"), top: x.getBoundingClientRect().top } : null; };
+    const grow = resting => {
+      if (!browse || !bibleReady(lang) || pend.current) return;
+      const first = idxOf(list[0]), last = idxOf(list[list.length - 1]), toTop = el.scrollTop, toEnd = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (toEnd < AHEAD && last < ALL.length - 1 && list.length < MAXHARD) { pend.current = true; setList([...list, ...ALL.slice(last + 1, last + 3)]); }
+      else if (first > 0 && (toTop < EDGE || (resting && toTop < AHEAD))) { pend.current = true; keep(); setList([...ALL.slice(Math.max(0, first - 4), first), ...list]); }  // 4 at a time: fewer corrections
+      else if (resting) {  // drop chapters that are far beyond the loaded margin (nothing near you moves)
+        const er = el.getBoundingClientRect(), secs = [...el.querySelectorAll("[data-sec]")], at = x => { const r = x.getBoundingClientRect(); return [r.top - er.top + el.scrollTop, r.bottom - er.top + el.scrollTop]; };
+        let d0 = 0, d1 = 0;
+        while (d0 < secs.length - 1 && at(secs[d0])[1] < el.scrollTop - 2 * AHEAD) d0++;
+        while (d1 < secs.length - 1 - d0 && at(secs[secs.length - 1 - d1])[0] > el.scrollTop + el.clientHeight + 2 * AHEAD) d1++;
+        if (d0 || d1) { pend.current = true; keep(); setList(list.slice(d0, list.length - d1)); }
+      }
+    };
+    let idle = 0;
     const upd = () => {
+      if (!touched.current && Math.abs(el.scrollTop - placed.current) > 24) touched.current = true;  // you moved it (touch, wheel, keys, scrollbar...)
       const hb = ref.current.querySelector("[data-hdr]").getBoundingClientRect().bottom, secs = el.querySelectorAll("[data-sec]");
       if (!secs.length) return;
       let a = 0; secs.forEach((x, i) => { if (x.getBoundingClientRect().top <= hb + 8) a = i; });
       const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
       if (atEnd && (!browse || idxOf(list[list.length - 1]) === ALL.length - 1)) a = secs.length - 1;  // at the very end you are in the last chapter
       setCur(secs[a].getAttribute("data-key"));
-      if (!browse || !bibleReady(lang) || pend.current) return;
-      const dy = el.scrollTop - lastTop.current; lastTop.current = el.scrollTop;
-      const full = list.length >= MAXN;  // once full, only grow in the direction you are scrolling
-      if ((!full || dy < 0) && el.scrollTop < NEAR && idxOf(list[0]) > 0) { pend.current = true; keep(); setList([ALL[idxOf(list[0]) - 1], ...list].slice(0, MAXN)); }
-      else if ((!full || dy > 0) && el.scrollHeight - el.scrollTop - el.clientHeight < NEAR && idxOf(list[list.length - 1]) < ALL.length - 1) { pend.current = true; keep(); setList([...list, ALL[idxOf(list[list.length - 1]) + 1]].slice(-MAXN)); }
+      grow(false);
+      clearTimeout(idle); idle = setTimeout(() => grow(true), 120);  // 120 ms without scrolling = at rest
     };
     const mark = () => { touched.current = true; };
     el.addEventListener("scroll", upd, { passive: true }); el.addEventListener("touchstart", mark, { passive: true }); el.addEventListener("wheel", mark, { passive: true });
     upd();
-    return () => { el.removeEventListener("scroll", upd); el.removeEventListener("touchstart", mark); el.removeEventListener("wheel", mark); };
+    return () => { clearTimeout(idle); el.removeEventListener("scroll", upd); el.removeEventListener("touchstart", mark); el.removeEventListener("wheel", mark); };
   }, [item, ver, list, lang]);
 
   const say = m => { setToast(m); clearTimeout(tt.current); tt.current = setTimeout(() => setToast(""), 1300); };
   const rangeKeys = m => { const lo = Math.min(m.a, m.to), hi = Math.max(m.a, m.to), o = []; for (let v = lo; v <= hi; v++) o.push(`${m.ck}:${v}`); return o; };
   const selKeys = m => rangeKeys(m).filter(k => ref.current && ref.current.querySelector(`[data-vk="${k}"]`));
   const copyStr = ks => { const L = act.current.lang, { b, n } = pk(ks[0]), d = CH[`${b} ${n}`], vs = ks.map(k => pk(k).v); const body = vs.map(v => [L !== "ta" && d.en[v], L !== "en" && d.ta[v]].filter(Boolean).join("\n")).join("\n"); return `${body}\n— ${disp(b, L)} ${n}:${vs.length > 1 ? vs[0] + "–" + vs[vs.length - 1] : vs[0]}` + (L === "ta" ? "" : " (ESV)"); };
-  const runAction = (i, m) => {
-    const a = act.current, ks = selKeys(m); setM(null); if (!ks.length) return;
-    if (i === 0) { const all = ks.every(k => a.favs.includes(k)); ks.forEach(k => { if (all === a.favs.includes(k)) a.toggleFav(k); }); say(all ? "Removed from favourites" : "Added to favourites"); }
-    else if (i === 1) { const all = ks.every(k => a.hls[k]); ks.forEach(k => { if (all === !!a.hls[k]) a.toggleHl(k); }); say(all ? "Highlight removed" : "Highlighted"); }
-    else { copyText(copyStr(ks)); say("Copied"); }
-  };
 
-  // long-press a verse, drag to extend the selection (auto-scrolls near the edges); buttons stay until you tap outside
+  // Gestures on a verse (a mouse drag works the same as a finger):
+  //  - drag right: add / remove favourite.  drag left: highlight / remove highlight.  The verse follows the finger and springs back.
+  //  - press and hold, then drag over more verses: everything selected is copied the moment you let go.
   useEffect(() => {
     const el = ref.current; if (!el) return;
-    const s = { t: 0, x: 0, y: 0, fx: 0, fy: 0, on: false, raf: 0, tap: null };
+    const FOLLOW = 90, COMMIT = 70;
+    const s = { t: 0, x: 0, y: 0, fx: 0, fy: 0, mode: "", row: null, vk: "", dx: 0, raf: 0, crossed: false };
     const hb = () => { const h = el.querySelector("[data-hdr]"); return h ? h.getBoundingClientRect().bottom : 56; };
     const vkAt = (x, y) => { const e = document.elementFromPoint(Math.min(Math.max(x, 2), window.innerWidth - 2), Math.min(Math.max(y, hb() + 4), window.innerHeight - 8)); const v = e && e.closest ? e.closest("[data-vk]") : null; return v ? v.getAttribute("data-vk") : null; };
     const extend = (x, y) => { const m = mref.current; if (!m) return; const vk = vkAt(x, y); if (!vk) return; const p = pk(vk); if (`${p.b} ${p.n}` !== m.ck || p.v === m.to) return; setM({ ...m, to: p.v }); };
-    const hover = (x, y) => (mref.current ? mref.current.pts.findIndex(([px, py]) => Math.hypot(px - x, py - y) < 38) : -1);
-    const tick = () => { s.raf = 0; if (!s.on) return; const top = hb() + 70, bot = window.innerHeight - 90; let d = 0; if (s.fy < top) d = -(1.5 + (top - s.fy) / 14); else if (s.fy > bot) d = 1.5 + (s.fy - bot) / 14; if (d) { sc.current.scrollTop += d; extend(s.fx, s.fy); s.raf = requestAnimationFrame(tick); } };
+    const tick = () => { s.raf = 0; if (s.mode !== "select") return; const top = hb() + 70, bot = window.innerHeight - 90; let d = 0; if (s.fy < top) d = -(1.5 + (top - s.fy) / 14); else if (s.fy > bot) d = 1.5 + (s.fy - bot) / 14; if (d) { sc.current.scrollTop += d; extend(s.fx, s.fy); s.raf = requestAnimationFrame(tick); } };
+    const pose = (row, dx) => {  // the verse follows the finger, a little slower once it is past the point where it counts
+      const a = Math.abs(dx), t = Math.sign(dx) * (a < FOLLOW ? a : FOLLOW + (a - FOLLOW) * 0.25), w = row.parentElement;
+      row.style.transition = "none"; row.style.transform = `translateX(${t}px)`;
+      const on = w.querySelector(dx > 0 ? "[data-ih]" : "[data-ip]"), off = w.querySelector(dx > 0 ? "[data-ip]" : "[data-ih]"), p = Math.min(1, a / COMMIT);
+      if (off) off.style.opacity = 0;
+      if (on) { on.style.opacity = p; on.style.transform = `scale(${0.5 + 0.5 * p + (a >= COMMIT ? 0.2 : 0)})`; }
+    };
+    const release = row => {
+      row.style.transition = "transform .5s cubic-bezier(.3,1.6,.5,1)"; row.style.transform = "translateX(0)";
+      row.parentElement.querySelectorAll("[data-ih],[data-ip]").forEach(i => { i.style.opacity = 0; });
+      setTimeout(() => { row.style.transition = ""; }, 520);
+    };
     const begin = (x, y, tg) => {
-      const inMenu = tg && tg.closest && tg.closest("[data-mb]");
-      s.tap = mref.current && !inMenu ? { x, y, t: Date.now() } : null;
-      const ve = tg && tg.closest ? tg.closest("[data-vk]") : null;
-      if (!ve || inMenu) return;
-      s.x = x; s.y = y; clearTimeout(s.t);
-      const vk = ve.getAttribute("data-vk");
-      s.t = setTimeout(() => { const p = pk(vk); s.on = true; s.tap = null; lpOn.current = true; s.fx = x; s.fy = y; setM({ ck: `${p.b} ${p.n}`, a: p.v, to: p.v, pts: spread(x, y), hv: -1 }); if (navigator.vibrate) navigator.vibrate(12); }, 420);
+      const row = tg && tg.closest ? tg.closest("[data-vk]") : null;
+      if (!row || x < 28) return;  // a swipe from the very edge goes back
+      clearTimeout(s.t); s.x = x; s.y = y; s.row = row; s.vk = row.getAttribute("data-vk"); s.mode = ""; s.dx = 0; s.crossed = false;
+      s.t = setTimeout(() => { s.mode = "select"; s.fx = x; s.fy = y; const p = pk(s.vk); setM({ ck: `${p.b} ${p.n}`, a: p.v, to: p.v }); if (navigator.vibrate) navigator.vibrate(12); }, 420);
     };
     const move = (x, y, e) => {
-      if (s.tap && Math.hypot(x - s.tap.x, y - s.tap.y) > 10) s.tap = null;
-      if (s.on) { if (e.cancelable) e.preventDefault(); s.fx = x; s.fy = y; if (mref.current) setM({ ...mref.current, pts: spread(x, y) }); extend(x, y); if (!s.raf) s.raf = requestAnimationFrame(tick); }
-      else if (s.t && Math.hypot(x - s.x, y - s.y) > 10) { clearTimeout(s.t); s.t = 0; }
+      if (!s.row) return;
+      if (s.mode === "select") { if (e.cancelable) e.preventDefault(); s.fx = x; s.fy = y; extend(x, y); if (!s.raf) s.raf = requestAnimationFrame(tick); return; }
+      const dx = x - s.x, dy = y - s.y;
+      if (s.mode === "") {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        clearTimeout(s.t); s.t = 0;
+        if (Math.abs(dx) > Math.abs(dy) * 1.2) s.mode = "swipe"; else { s.mode = "scroll"; return; }
+      }
+      if (s.mode === "swipe") {
+        if (e.cancelable) e.preventDefault();
+        s.dx = dx; pose(s.row, dx);
+        const c = Math.abs(dx) >= COMMIT; if (c && !s.crossed && navigator.vibrate) navigator.vibrate(10); s.crossed = c;
+      }
     };
-    const end = e => {
+    const finish = commit => {
       clearTimeout(s.t); s.t = 0; cancelAnimationFrame(s.raf); s.raf = 0;
-      if (s.on) { s.on = false; if (e.cancelable) e.preventDefault(); setTimeout(() => { lpOn.current = false; }, 0); return; }
-      if (s.tap && Date.now() - s.tap.t < 400) setM(null);
-      s.tap = null;
+      const { mode, row, vk, dx } = s; s.mode = ""; s.row = null;
+      if (mode === "select") {
+        const m = mref.current; setM(null);
+        const ks = commit && m ? selKeys(m) : [];
+        if (ks.length) { copyText(copyStr(ks)); say(ks.length > 1 ? `Copied ${ks.length} verses` : "Copied"); }
+      } else if (mode === "swipe") {
+        release(row);
+        if (commit && Math.abs(dx) >= COMMIT) {
+          const a = act.current;
+          if (dx > 0) { const was = a.favs.includes(vk); a.toggleFav(vk); say(was ? "Removed from favourites" : "Added to favourites"); }
+          else { const was = !!a.hls[vk]; a.toggleHl(vk); say(was ? "Highlight removed" : "Highlighted"); }
+        }
+      }
     };
     const ts = e => begin(e.touches[0].clientX, e.touches[0].clientY, e.target);
     const tm = e => move(e.touches[0].clientX, e.touches[0].clientY, e);
+    const te = () => finish(true), tc = () => finish(false);
     const md = e => { if (e.button === 0) begin(e.clientX, e.clientY, e.target); };
     const mm = e => move(e.clientX, e.clientY, e);
     const cm = e => e.preventDefault();
     el.addEventListener("touchstart", ts, { passive: true });
     el.addEventListener("touchmove", tm, { passive: false });
-    el.addEventListener("touchend", end, { passive: false });
-    el.addEventListener("touchcancel", end, { passive: false });
-    el.addEventListener("mousedown", md);
-    window.addEventListener("mousemove", mm);
-    window.addEventListener("mouseup", end);
+    el.addEventListener("touchend", te); el.addEventListener("touchcancel", tc);
+    el.addEventListener("mousedown", md); window.addEventListener("mousemove", mm); window.addEventListener("mouseup", te);
     el.addEventListener("contextmenu", cm);
-    return () => { clearTimeout(s.t); cancelAnimationFrame(s.raf); clearTimeout(tt.current); el.removeEventListener("touchstart", ts); el.removeEventListener("touchmove", tm); el.removeEventListener("touchend", end); el.removeEventListener("touchcancel", end); el.removeEventListener("mousedown", md); window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", end); el.removeEventListener("contextmenu", cm); };
+    return () => { clearTimeout(s.t); cancelAnimationFrame(s.raf); clearTimeout(tt.current); el.removeEventListener("touchstart", ts); el.removeEventListener("touchmove", tm); el.removeEventListener("touchend", te); el.removeEventListener("touchcancel", tc); el.removeEventListener("mousedown", md); window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", te); el.removeEventListener("contextmenu", cm); };
   }, []);
 
   const showEN = lang !== "ta", showTA = lang !== "en";
   const sec = { background: "none", border: "none", height: 36, padding: 0, cursor: "pointer", color: C.text, fontFamily: sans, display: "flex", alignItems: "center", justifyContent: "center" };
-  const rk = menu ? rangeKeys(menu) : [];
   return (
     <div ref={ref} style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 10, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div data-hdr="1" style={{ flex: "0 0 auto", background: "#000" }}>
+      <div data-hdr="1" style={{ flex: "0 0 auto", background: C.bg }}>
         <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(10px + ${TOP}) 20px 10px`, display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
             <button onClick={close} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -22px", padding: "12px 9px 12px 16px" }}><Chev d="left" h={xh(17)} /></button>
@@ -285,7 +323,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
           </div>
           <div style={{ display: "flex", background: C.card, borderRadius: RAD, overflow: "hidden", flexShrink: 0 }}>
             <button onClick={() => setSize(Math.max(10, size - 2))} aria-label="Smaller text" style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>−</button>
-            <button onClick={() => setLang(LANGS[(LANGS.indexOf(lang) + 1) % 3])} aria-label="Language" style={{ ...sec, width: 52, borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}` }}><LangLabel l={lang} /></button>
+            <button onClick={() => setLang(LANGS[(LANGS.indexOf(lang) + 1) % 3])} aria-label="Language" style={{ ...sec, width: 52, borderLeft: `1px solid ${C.bg}`, borderRight: `1px solid ${C.bg}` }}><LangLabel l={lang} /></button>
             <button onClick={() => setSize(Math.min(28, size + 2))} aria-label="Larger text" style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>+</button>
           </div>
         </div>
@@ -302,15 +340,22 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
                 {vs.length ? vs.map(v => {
                   const vk = `${b} ${n}:${v}`, sel = menu && menu.ck === k && v >= Math.min(menu.a, menu.to) && v <= Math.max(menu.a, menu.to);
                   return (
-                    <div key={v} data-vk={vk} data-hl={target && item.hl === v ? 1 : undefined} style={{ display: "flex", alignItems: "baseline", padding: "4px 8px", margin: "0 -8px 6px", borderRadius: RAD, transition: "background .15s", background: sel ? accentA(.38) : hls[vk] || (target && jump === v) ? accentA(.22) : "transparent" }}>
-                      <span style={{ flex: "0 0 2em", fontFamily: sans, fontSize: `${Math.max(9, size * 0.68)}px`, fontWeight: 600, lineHeight: 1, color: C.accent, fontVariantNumeric: "lining-nums tabular-nums" }}>{v}</span>
+                    <div key={v} style={{ position: "relative", margin: "0 -8px 6px" }}>
+                      <div data-ih="1" style={{ position: "absolute", left: -12, top: 0, bottom: 0, display: "flex", alignItems: "center", color: C.accent, opacity: 0, transition: "opacity .2s" }}>{Ico.heart(true)}</div>
+                      <div data-ip="1" style={{ position: "absolute", right: -12, top: 0, bottom: 0, display: "flex", alignItems: "center", color: C.accent, opacity: 0, transition: "opacity .2s" }}>{Ico.pen(false)}</div>
+                    <div data-vk={vk} data-hl={target && item.hl === v ? 1 : undefined} style={{ position: "relative", display: "flex", alignItems: "baseline", padding: "4px 8px", borderRadius: RAD, transition: "background .15s", touchAction: "pan-y", background: sel ? C.select : hls[vk] || (target && jump === v) ? C.hl : "transparent" }}>
+                      <div style={{ flex: "0 0 2em", fontSize: `${Math.max(9, size * 0.68)}px`, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3 }}>
+                        <span style={{ fontFamily: sans, fontWeight: 600, lineHeight: 1, color: C.accent, fontVariantNumeric: "lining-nums tabular-nums" }}>{v}</span>
+                        {favs.includes(vk) && <span style={{ color: C.accent, display: "flex" }}>{Ico.heartS()}</span>}
+                      </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {showEN && d.en[v] && <div lang="en" style={{ fontFamily: serif, textAlign: "justify", hyphens: "auto", WebkitHyphens: "auto" }}>{d.en[v]}</div>}
-                        {showTA && d.ta[v] && <div lang="ta" style={{ fontFamily: taFont, fontSize: "0.95em", lineHeight: 1.75, textAlign: "left", marginTop: showEN ? 6 : 0, color: showEN ? "#c7c7cc" : C.text }}>{d.ta[v]}</div>}
+                        {showTA && d.ta[v] && <div lang="ta" style={{ fontFamily: taFont, fontSize: "0.95em", lineHeight: 1.75, textAlign: "left", marginTop: showEN ? 6 : 0, color: showEN ? C.text : C.text }}>{d.ta[v]}</div>}
                       </div>
                     </div>
+                    </div>
                   );
-                }) : <div style={{ color: C.sub, fontFamily: sans, fontSize: 15 }}>{bibleReady(lang) ? "The full text for this chapter loads from your Bible files in the PWA build." : bibleFailed() ? "Couldn't load the Bible. Check your connection." : "Loading…"}</div>}
+                }) : <div style={{ color: C.text, fontFamily: sans, fontSize: 15 }}>{bibleReady(lang) ? "The full text for this chapter loads from your Bible files in the PWA build." : bibleFailed() ? "Couldn't load the Bible. Check your connection." : "Loading…"}</div>}
               </div>
             </section>
           );
@@ -318,15 +363,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
         {!browse && <Pill onClick={advance}>{last ? "Done" : "Next"}</Pill>}
       </div>
       </div>
-      {menu && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 30, pointerEvents: "none" }}>
-          {menu.pts.map(([x, y], i) => {
-            const on = menu.hv === i, st = i === 0 ? rk.every(k => favs.includes(k)) : i === 1 ? rk.every(k => hls[k]) : false;
-            return <div key={i} data-mb="1" onClick={() => runAction(i, menu)} style={{ position: "absolute", left: x - 26, top: y - 26, width: 52, height: 52, borderRadius: 26, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "auto", cursor: "pointer", background: on ? C.accent : "rgba(44,44,46,.97)", color: on ? "#fff" : st ? C.accent : C.text, boxShadow: "0 6px 20px rgba(0,0,0,.5)", transform: on ? "scale(1.18)" : "scale(1)", transition: "transform .12s, background .12s" }}>{[Ico.heart(st), Ico.pen(st), Ico.copy()][i]}</div>;
-          })}
-        </div>
-      )}
-      {toast && <div style={{ position: "fixed", left: 0, right: 0, bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", display: "flex", justifyContent: "center", zIndex: 31, pointerEvents: "none" }}><div style={{ background: C.card2, color: C.text, fontSize: 14, fontFamily: sans, padding: "9px 16px", borderRadius: RAD }}>{toast}</div></div>}
+      {toast && <div style={{ position: "fixed", left: 0, right: 0, bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", display: "flex", justifyContent: "center", zIndex: 31, pointerEvents: "none" }}><div style={{ background: C.card, color: C.text, fontSize: 14, fontFamily: sans, padding: "9px 16px", borderRadius: RAD }}>{toast}</div></div>}
     </div>
   );
 }
@@ -342,101 +379,97 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   const m = s.match(/^(\d?\s*[a-z][a-z ]*?)\s*(\d+)(?::(\d+))?$/i);
   let target = null;
   if (m) { const k = norm(m[1]); const f = BOOKS.find(([b]) => norm(b).startsWith(k) || k === norm(b) + "s"); if (f && +m[2] >= 1 && +m[2] <= f[1]) target = { b: f[0], n: +m[2], v: m[3] ? +m[3] : undefined }; }
-  const { hits, total } = useMemo(() => (s.length < 2 || target ? { hits: [], total: 0 } : searchBible(s, lang)), [s, !!target, lang, ver]);
-  const mark = tx => tx.split(new RegExp("(" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, "[\"\u201c\u201d]") + ")", "i")).map((p, i) => i % 2 ? <mark key={i} style={{ background: accentA(.35), color: C.text, borderRadius: 3 }}>{p}</mark> : p);
-  const lines = (x, hl) => [lang !== "ta" && x.en ? ["en", x.en] : null, lang !== "en" && x.ta ? ["ta", x.ta] : null].filter(Boolean).map(([l, tx]) => <div key={l} lang={l} style={{ fontFamily: l === "ta" ? taFont : serif, fontSize: l === "ta" ? 15 : 16, lineHeight: 1.55, marginTop: l === "ta" && lang === "both" ? 4 : 0, color: l === "ta" && lang === "both" ? "#c7c7cc" : C.text }}>{hl ? mark(tx) : tx}</div>);
+  const [limit, setLimit] = useState(60);
+  useEffect(() => { setLimit(60); }, [s, lang]);
+  const { hits, total } = useMemo(() => (s.length < 2 || target ? { hits: [], total: 0 } : searchBible(s, lang, limit)), [s, !!target, lang, ver, limit]);
+  const mark = tx => tx.split(new RegExp("(" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, "[\"\u201c\u201d]") + ")", "i")).map((p, i) => i % 2 ? <mark key={i} style={{ background: C.select, color: C.text, borderRadius: 3 }}>{p}</mark> : p);
+  const lines = (x, hl) => [lang !== "ta" && x.en ? ["en", x.en] : null, lang !== "en" && x.ta ? ["ta", x.ta] : null].filter(Boolean).map(([l, tx]) => <div key={l} lang={l} style={{ fontFamily: l === "ta" ? taFont : serif, fontSize: l === "ta" ? 15 : 16, lineHeight: 1.55, marginTop: l === "ta" && lang === "both" ? 4 : 0, color: l === "ta" && lang === "both" ? C.text : C.text }}>{hl ? mark(tx) : tx}</div>);
   const group = (title, list, off) => (
     <div style={{ marginBottom: 28 }}>
       <div style={{ color: C.accent, fontSize: lang === "ta" ? 17 : 13, fontWeight: 600, letterSpacing: lang === "ta" ? 0 : 0.6, textTransform: "uppercase", margin: "0 8px 8px" }}>{title}</div>
       <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
-        {list.map(([b, cnt], i) => <div key={b} onClick={() => (cnt === 1 ? go({ ch: [[b, 1]] }) : setBook(b))} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 52, boxSizing: "border-box", padding: "0 20px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer", fontSize: 17 }}><span>{disp(b, lang)}</span><span style={{ color: C.sub, display: "flex", alignItems: "center", gap: 10 }}>{lang === "both" && <span style={{ fontSize: 15 }}>{TA_NAMES[off + i]}</span>}<Chev /></span></div>)}
+        {list.map(([b, cnt], i) => <div key={b} onClick={() => (cnt === 1 ? go({ ch: [[b, 1]] }) : setBook(b))} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 52, boxSizing: "border-box", padding: "0 20px", borderTop: i ? `1px solid ${C.bg}` : "none", cursor: "pointer", fontSize: 17 }}><span>{disp(b, lang)}</span><span style={{ color: C.text, display: "flex", alignItems: "center", gap: 10 }}>{lang === "both" && <span style={{ fontSize: 15 }}>{TA_NAMES[off + i]}</span>}<Chev /></span></div>)}
       </div>
     </div>
   );
-  const back = () => <button onClick={() => { setBook(null); setShowFavs(false); }} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 8px -16px" }}><Chev d="left" /></button>;
   const sub = lang === "en" ? "English Standard Version (ESV)" : lang === "ta" ? "Tamil Bible" : "ESV · Tamil Bible";
 
-  const favsView = showFavs && (
-    <div>
-      <div style={{ display: "flex", alignItems: "baseline", marginBottom: 20 }}>
-        <button onClick={() => setShowFavs(false)} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(34)} /></button>
-        <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.8, margin: 0 }}>Favourites</h1>
-      </div>
-      {favs.length ? (
-        <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
-          {[...favs].reverse().map((k, i) => { const { b, n, v } = pk(k), d = CH[b + " " + n] || { en: {}, ta: {} }, x = { en: d.en[v] || "", ta: d.ta[v] || "" }; return (
-            <div key={k} onClick={() => go({ ch: [[b, n]], hl: v })} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "16px 12px 16px 20px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{disp(b, lang)} {n}:{v}</div>
-                {lines(x, false)}
-              </div>
-              <button onClick={e => { e.stopPropagation(); toggleFav(k); }} aria-label="Remove favourite" style={{ background: "none", border: "none", color: C.accent, padding: 8, display: "flex", cursor: "pointer" }}>{Ico.heart(true)}</button>
-            </div>); })}
-        </div>
-      ) : <div style={{ color: C.sub, textAlign: "center", padding: "40px 20px", lineHeight: 1.5 }}>Long-press a verse, then tap the heart to save it here.</div>}
+  // the overlays keep their top bar fixed (head) and scroll only the content under it (body)
+  const favsHead = showFavs && (
+    <div style={{ display: "flex", alignItems: "baseline", marginBottom: 20 }}>
+      <button onClick={() => setShowFavs(false)} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(34)} /></button>
+      <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.8, margin: 0 }}>Favourites</h1>
     </div>
   );
+  const favsBody = showFavs && (favs.length ? (
+    <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
+      {[...favs].reverse().map((k, i) => { const { b, n, v } = pk(k), d = CH[b + " " + n] || { en: {}, ta: {} }, x = { en: d.en[v] || "", ta: d.ta[v] || "" }; return (
+        <div key={k} onClick={() => go({ ch: [[b, n]], hl: v })} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "16px 12px 16px 20px", borderTop: i ? `1px solid ${C.bg}` : "none", cursor: "pointer" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{disp(b, lang)} {n}:{v}</div>
+            {lines(x, false)}
+          </div>
+          <button onClick={e => { e.stopPropagation(); toggleFav(k); }} aria-label="Remove favourite" style={{ background: "none", border: "none", color: C.accent, padding: 8, display: "flex", cursor: "pointer" }}>{Ico.heart(true)}</button>
+        </div>); })}
+    </div>
+  ) : <div style={{ color: C.text, textAlign: "center", padding: "40px 20px", lineHeight: 1.5 }}>Swipe a verse to the right to save it here.</div>);
 
-  const bookView = book && (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
-          <button onClick={() => setBook(null)} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(28)} /></button>
-          <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0, color: C.accent }}>{disp(book, lang)}</h2>
-        </div>
-        <LangBtn lang={lang} setLang={setLang} />
+  const bookHead = book && (
+    <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
+        <button onClick={() => setBook(null)} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(28)} /></button>
+        <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0, color: C.accent }}>{disp(book, lang)}</h2>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
-        {Array.from({ length: BOOKS.find(([b]) => b === book)[1] }, (_, i) => <button key={i} onClick={() => go({ ch: [[book, i + 1]] })} style={{ aspectRatio: "1", borderRadius: RAD, border: "none", background: C.card, color: C.text, fontSize: 17, fontFamily: sans, cursor: "pointer" }}>{i + 1}</button>)}
-      </div>
+      <LangBtn lang={lang} setLang={setLang} />
+    </div>
+  );
+  const bookBody = book && (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
+      {Array.from({ length: BOOKS.find(([b]) => b === book)[1] }, (_, i) => <button key={i} onClick={() => go({ ch: [[book, i + 1]] })} style={{ aspectRatio: "1", borderRadius: RAD, border: "none", background: C.card, color: C.text, fontSize: 17, fontFamily: sans, cursor: "pointer" }}>{i + 1}</button>)}
     </div>
   );
 
   return (
     <>
-    <div key="list" style={{ height: `calc(100dvh - ${NAV})`, overflowY: "auto", overflowX: "hidden", boxSizing: "border-box", padding: `calc(28px + ${TOP}) 24px 32px` }}>
+    <div key="list" style={{ marginTop: TOP, height: `calc(100dvh - ${NAV} - ${TOP})`, overflowY: "auto", overflowX: "hidden", boxSizing: "border-box", padding: "28px 24px 32px" }}>  {/* starts below the status bar, so text never scrolls under the clock */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1, margin: 0 }}>{lang === "ta" ? "வேதாகமம்" : "Bible"}</h1>
         <LangBtn lang={lang} setLang={setLang} />
       </div>
-      <div style={{ color: C.sub, fontSize: 13, margin: "0 0 24px" }}>{sub}</div>
+      <div style={{ color: C.grey, fontSize: 13, margin: "0 0 24px" }}>{sub}</div>
       <div style={{ position: "relative", marginBottom: 20 }}>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search, or go to John 3:16" style={{ display: "block", width: "100%", boxSizing: "border-box", background: C.card2, border: "none", borderRadius: RAD, height: 52, padding: "0 44px 0 16px", color: C.text, fontSize: 17, fontFamily: sans, outline: "none" }} />
-        {q && <button onClick={() => setQ("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", cursor: "pointer", color: C.sub }}><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="currentColor" /><path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke="#2c2c2e" strokeWidth="1.8" strokeLinecap="round" /></svg></button>}
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search, or go to John 3:16" style={{ display: "block", width: "100%", boxSizing: "border-box", background: C.card, border: "none", borderRadius: RAD, height: 52, padding: "0 44px 0 16px", color: C.text, fontSize: 17, fontFamily: sans, outline: "none" }} />
+        {q && <button onClick={() => setQ("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", cursor: "pointer", color: C.text }}><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="currentColor" /><path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke={C.bg} strokeWidth="1.8" strokeLinecap="round" /></svg></button>}
       </div>
-      {total > 0 && <div style={{ color: C.sub, fontSize: 12, margin: "-10px 4px 14px" }}>{total === 1 ? "1 result" : `${total} results`}{total > hits.length ? ` · showing first ${hits.length}` : ""}</div>}
+      {total > 0 && <div style={{ color: C.grey, fontSize: 12, margin: "-10px 4px 14px" }}>{total === 1 ? "1 result" : `${total} results`}{total > hits.length ? ` · showing first ${hits.length}` : ""}</div>}
       {target ? (
         <div onClick={() => go({ ch: [[target.b, target.n]], hl: target.v })} style={{ background: C.card, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 20px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: 17 }}>
-          <span style={{ color: C.accent, fontWeight: 600 }}>Go to {disp(target.b, lang)} {target.n}{target.v ? ":" + target.v : ""}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
+          <span style={{ color: C.accent, fontWeight: 600 }}>Go to {disp(target.b, lang)} {target.n}{target.v ? ":" + target.v : ""}</span><span style={{ color: C.text, display: "flex" }}><Chev /></span>
         </div>
       ) : s.length > 1 ? (
         <div>
           {hits.length ? <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
-            {hits.map((h, i) => <div key={i} onClick={() => go({ ch: [[h.b, h.n]], hl: h.v })} style={{ padding: "16px 20px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
+            {hits.map((h, i) => <div key={i} onClick={() => go({ ch: [[h.b, h.n]], hl: h.v })} style={{ padding: "16px 20px", borderTop: i ? `1px solid ${C.bg}` : "none", cursor: "pointer" }}>
               <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{disp(h.b, lang)} {h.n}:{h.v}</div>
               {lines(h, true)}
             </div>)}
-          </div> : <div style={{ color: C.sub, textAlign: "center", padding: "32px 0" }}>No results for “{s}”</div>}
-        </div>
-      ) : book ? (
-        <div>
-          {back()}
-          <h2 style={{ fontSize: 28, fontWeight: 700, margin: "0 0 20px", color: C.accent }}>{disp(book, lang)}</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
-            {Array.from({ length: BOOKS.find(([b]) => b === book)[1] }, (_, i) => <button key={i} onClick={() => go({ ch: [[book, i + 1]] })} style={{ aspectRatio: "1", borderRadius: RAD, border: "none", background: C.card, color: C.text, fontSize: 17, fontFamily: sans, cursor: "pointer" }}>{i + 1}</button>)}
-          </div>
+          </div> : <div style={{ color: C.text, textAlign: "center", padding: "32px 0" }}>No results for “{s}”</div>}
+          {total > hits.length && <button onClick={() => setLimit(l => l + 60)} style={{ display: "block", margin: "6px auto 0", background: "none", border: "none", color: C.accent, fontSize: 14, fontFamily: sans, padding: "14px 20px", cursor: "pointer" }}>Show more</button>}
         </div>
       ) : (<>
-        <div onClick={() => setShowFavs(true)} style={{ background: C.card, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 20px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 17, marginBottom: 28 }}>
-          <span style={{ color: C.accent, display: "flex" }}>{Ico.heart(true)}</span><span style={{ flex: 1 }}>Favourites</span><span style={{ color: C.sub }}>{favs.length}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
+        <div onClick={() => setShowFavs(true)} style={{ border: `1.5px solid ${C.accent}`, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 18px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 17, marginBottom: 28 }}>
+          <span style={{ color: C.accent, display: "flex" }}>{Ico.heart(true)}</span><span style={{ flex: 1 }}>Favourites</span><span style={{ color: C.accent }}>{favs.length}</span><span style={{ color: C.accent, display: "flex" }}><Chev /></span>
         </div>
         {group(lang === "ta" ? "பழைய ஏற்பாடு" : "Old Testament", BOOKS.slice(0, 39), 0)}{group(lang === "ta" ? "புதிய ஏற்பாடு" : "New Testament", BOOKS.slice(39), 39)}
-        <div style={{ textAlign: "center", color: C.sub, fontSize: 13, padding: "4px 0 24px" }}>Created by Benjamin Hanigraf</div>
+        <div style={{ textAlign: "center", color: C.grey, fontSize: 13, padding: "4px 0 24px" }}>Created by Benjamin Hanigraf</div>
       </>)}
     </div>
-    {(favsView || bookView) && (
-      <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: `0 0 ${NAV} 0`, zIndex: 4, background: C.bg, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
-        <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(28px + ${TOP}) 24px 32px` }}>{showFavs ? favsView : bookView}</div>
+    {(showFavs || book) && (
+      <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: `0 0 ${NAV} 0`, zIndex: 4, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
+        <div style={{ flex: "0 0 auto", maxWidth: 430, width: "100%", margin: "0 auto", boxSizing: "border-box", padding: `calc(28px + ${TOP}) 24px 0` }}>{showFavs ? favsHead : bookHead}</div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
+          <div style={{ maxWidth: 430, margin: "0 auto", padding: "0 24px 32px" }}>{showFavs ? favsBody : bookBody}</div>
+        </div>
       </div>
     )}
     </>
@@ -495,7 +528,7 @@ function Calendar({ start, today, view, status, pick, close, mark }) {
             if (!d) return <div key={i} />;
             const ds = iso(new Date(y, mo, d)), dn = dayDiff(ds, start), inn = dn >= 0 && dn < planLen(), s = inn ? status(dn) : "out";
             return (
-              <button key={i} data-dn={inn ? dn : undefined} disabled={!inn} onClick={() => { if (!ps.current.quiet) pick(dn); }} style={{ justifySelf: "center", width: 44, height: 44, borderRadius: 22, cursor: inn ? "pointer" : "default", fontSize: 17, fontFamily: sans, fontWeight: ds === today ? 700 : 400, background: s === "full" ? C.accent : "transparent", border: s === "part" ? `2px solid ${C.accent}` : "2px solid transparent", color: s === "full" ? "#fff" : inn ? (ds === today ? C.accent : C.text) : "#3a3a3c", padding: 0 }}>{d}</button>
+              <button key={i} data-dn={inn ? dn : undefined} disabled={!inn} onClick={() => { if (!ps.current.quiet) pick(dn); }} style={{ justifySelf: "center", width: 44, height: 44, borderRadius: 22, cursor: inn ? "pointer" : "default", fontSize: 17, fontFamily: sans, fontWeight: ds === today ? 700 : 400, background: s === "full" ? C.accent : "transparent", border: s === "part" ? `2px solid ${C.accent}` : "2px solid transparent", color: s === "full" ? C.text : inn ? (ds === today ? C.accent : C.text) : C.grey, padding: 0 }}>{d}</button>
             );
           })}
         </div>
@@ -619,9 +652,9 @@ export default function App() {
       <div style={{ color: C.accent, fontSize: 11, marginBottom: 6 }}>{"SMTWTFS"[i]}</div>
       {c.inn ? (
         <DayRing frac={c.frac} size={rs} onClick={e => { e.stopPropagation(); setView(c.dn); }} style={{ margin: "0 auto", cursor: "pointer" }}>
-          <div style={{ width: rs - 10, height: rs - 10, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: c.today ? 700 : 500, background: c.today ? C.accent : c.dn === n ? "rgba(255,255,255,.16)" : "transparent", color: c.today ? "#fff" : C.text }}>{c.d}</div>
+          <div style={{ width: rs - 10, height: rs - 10, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: c.today ? 700 : 500, background: c.today ? C.accent : c.dn === n ? C.card : "transparent", color: c.today ? C.text : C.text }}>{c.d}</div>
         </DayRing>
-      ) : <div style={{ width: rs, height: rs, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#3a3a3c" }}>{c.d}</div>}
+      ) : <div style={{ width: rs, height: rs, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: C.grey }}>{c.d}</div>}
     </div>
   ));
 
@@ -636,7 +669,7 @@ export default function App() {
               {[[`${Math.round(chaptersDone / TOTAL * 100)}%`, "of the Bible"], [booksDone || "-", "books read"], [streak, "day streak"]].map(([v, l]) => (
                 <div key={l} style={{ background: C.card, borderRadius: RAD, padding: `${cl(12, 1.8, 18)} 14px` }}>
                   <div style={{ fontSize: cl(24, 3.5, 30), fontWeight: 700, letterSpacing: -0.4 }}>{v}</div>
-                  <div style={{ color: C.sub, fontSize: 12, marginTop: 1 }}>{l}</div>
+                  <div style={{ color: C.text, fontSize: 12, marginTop: 1 }}>{l}</div>
                 </div>
               ))}
             </div>
@@ -649,7 +682,7 @@ export default function App() {
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div>
-                <div style={{ color: C.sub, fontSize: 13, height: 17, marginBottom: 2 }}>{catchUp ? "Catch-up" : ""}</div>
+                <div style={{ color: C.accent, fontSize: 13, height: 17, marginBottom: 2 }}>{catchUp ? "Catch-up" : ""}</div>
                 <h1 style={{ fontSize: cl(20, 2.9, 26), fontWeight: 700, letterSpacing: -0.5, margin: 0, whiteSpace: "nowrap", lineHeight: 1.2 }}>{dateStr}</h1>
               </div>
             </div>
@@ -658,18 +691,18 @@ export default function App() {
             {items.length ? (
               <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
                 {items.map((it, i) => (
-                  <div key={it.key} onClick={() => setOpen(it)} style={{ display: "flex", alignItems: "center", gap: 12, height: ROWH, boxSizing: "border-box", padding: "0 14px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
+                  <div key={it.key} onClick={() => setOpen(it)} style={{ display: "flex", alignItems: "center", gap: 12, height: ROWH, boxSizing: "border-box", padding: "0 14px", borderTop: i ? `1px solid ${C.bg}` : "none", cursor: "pointer" }}>
                     <Check on={!!done[it.key]} onClick={() => toggle(it.key)} />
-                    <div style={{ flex: 1, opacity: done[it.key] ? 0.45 : 1 }}>
-                      {catchUp && <div style={{ color: C.sub, fontSize: 12, marginBottom: 1 }}>{addDays(start, it.n).toLocaleDateString("en-GB", { weekday: "long" })}</div>}
-                      <div style={{ fontSize: cl(16, 2.1, 18), fontWeight: 400 }}>{label(it.ch, lang)}</div>
+                    <div style={{ flex: 1 }}>
+                      {catchUp && <div style={{ color: C.accent, fontSize: 12, marginBottom: 1 }}>{addDays(start, it.n).toLocaleDateString("en-GB", { weekday: "long" })}</div>}
+                      <div style={{ fontSize: cl(16, 2.1, 18), fontWeight: 400, color: done[it.key] ? C.accent : C.text }}>{label(it.ch, lang)}</div>
                     </div>
-                    <span style={{ color: C.sub, display: "flex", fontSize: 16 }}><Chev /></span>
+                    <span style={{ color: C.text, display: "flex", fontSize: 16 }}><Chev /></span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div style={{ background: C.card, borderRadius: RAD, padding: "24px 20px", textAlign: "center", color: C.sub, fontSize: 15, lineHeight: 1.5 }}>
+              <div style={{ background: C.card, borderRadius: RAD, padding: "24px 20px", textAlign: "center", color: C.text, fontSize: 15, lineHeight: 1.5 }}>
                 {catchUp ? "A day to rest. Open any unfinished day from the calendar." : "The plan is complete."}
               </div>
             )}
@@ -681,10 +714,10 @@ export default function App() {
         </div>
       )}
 
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 5, background: "#000", borderTop: `1px solid ${C.line}`, height: NAV, boxSizing: "border-box" }}>
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 5, background: C.bg, borderTop: `1px solid ${C.card}`, height: NAV, boxSizing: "border-box" }}>
         <div style={{ maxWidth: 430, margin: "0 auto", display: "flex" }}>
           {[["today", "Today"], ["bible", "Bible"]].map(([k, l]) => (
-            <button key={k} onClick={() => { setTab(k); setWeekOff(0); if (k === "today") setView(todayN); }} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "9px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, color: tab === k ? C.accent : C.sub, fontFamily: sans, fontSize: 11, fontWeight: 500 }}>{ICONS[k]}{l}</button>
+            <button key={k} onClick={() => { setTab(k); setWeekOff(0); if (k === "today") setView(todayN); }} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "9px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, color: tab === k ? C.accent : C.grey, fontFamily: sans, fontSize: 11, fontWeight: 500 }}>{ICONS[k]}{l}</button>
           ))}
         </div>
       </nav>
