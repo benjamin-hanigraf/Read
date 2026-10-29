@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useLayoutEffect, useRef, useMemo, useReducer } from "react";
 import { flushSync } from "react-dom";
+import { t, dayLetters, weekdayName, longDate, monthYear, nResults, showingFirst, nCopied } from "./i18n.js";
 
 import { ARTS } from "./data/arts.js";
 import { TA_NAMES } from "./data/names.js";
@@ -16,7 +17,7 @@ const nm = (b, lang) => (lang === "ta" ? TA_NAMES[BOOKS.findIndex(([x]) => x ===
 const READER_TA = { Acts: "அப்போஸ்தலர்", Revelation: "வெளிப்படுத்தல்" };  // shorter Tamil names, used only on the verse reader screen where the full ones get cut off
 const rn = (b, lang) => (lang === "ta" && READER_TA[b]) || nm(b, lang);
 const disp = (b, lang) => (lang === "ta" ? nm(b, "ta") : b === "Psalm" ? "Psalms" : b);
-const label = (c, lang) => { if (!c.length) return "Rest"; const [b1, n1] = c[0], [b2, n2] = c[c.length - 1]; const f = b => nm(b, lang); return b1 === b2 ? (n1 === n2 ? `${f(b1)} ${n1}` : `${f(b1)} ${n1}–${n2}`) : `${f(b1)} ${n1} – ${f(b2)} ${n2}`; };
+const label = (c, lang) => { if (!c.length) return t(lang, "rest"); const [b1, n1] = c[0], [b2, n2] = c[c.length - 1]; const f = b => nm(b, lang); return b1 === b2 ? (n1 === n2 ? `${f(b1)} ${n1}` : `${f(b1)} ${n1}–${n2}`) : `${f(b1)} ${n1} – ${f(b2)} ${n2}`; };
 const LANGS = ["en", "ta", "both"];
 const LANG_LABEL = { en: "A", ta: "அ", both: "Aஅ" };
 const taFont = "'Noto Serif Tamil', 'Noto Sans Tamil', 'Tamil MN', 'Tamil Sangam MN', 'Nirmala UI', 'Latha', serif";
@@ -102,7 +103,6 @@ const okSize = v => typeof v === "number" && v >= 10 && v <= 28;
 const okLang = v => LANGS.includes(v);
 const okFavs = v => Array.isArray(v) && v.every(k => typeof k === "string" && /^.+ \d+:\d+$/.test(k));
 const okHls = v => okKeys(v, /^.+ \d+:\d+$/);
-const longDate = d => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" }).formatToParts(d).map(x => [x.type, x.value])); return `${p.weekday}, ${p.day} ${p.month}`; };
 const iso = d => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 6e4); return z.toISOString().slice(0, 10); };
 const dayDiff = (a, b) => Math.round((new Date(a + "T00:00") - new Date(b + "T00:00")) / 864e5);
 const addDays = (s, k) => { const d = new Date(s + "T00:00"); d.setDate(d.getDate() + k); return d; };
@@ -111,8 +111,8 @@ const Pill = ({ children, onClick, disabled, ghost }) => (
   <button onClick={onClick} disabled={disabled} style={{ width: "100%", padding: `${cl(14, 1.9, 17)} 0`, borderRadius: RAD, border: "none", fontSize: 16, fontWeight: 600, fontFamily: sans, cursor: disabled ? "default" : "pointer", background: ghost ? C.card : disabled ? C.card2 : C.accent, color: ghost ? C.text : disabled ? C.sub : ON_ACCENT }}>{children}</button>
 );
 
-const Check = ({ on, onClick }) => (
-  <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label="Mark as read" aria-pressed={on} style={{ background: "none", border: "none", padding: 11, margin: -11, cursor: "pointer", flexShrink: 0, display: "flex" }}>
+const Check = ({ on, onClick, lang }) => (
+  <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label={t(lang, "aRead")} aria-pressed={on} style={{ background: "none", border: "none", padding: 11, margin: -11, cursor: "pointer", flexShrink: 0, display: "flex" }}>
     <span style={{ width: 18, height: 18, borderRadius: 9, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", border: on ? "none" : `1.5px solid ${C.line}`, background: on ? C.accent : "transparent", color: ON_ACCENT, fontSize: 11, fontWeight: 700, transition: "background .2s" }}>{on ? "✓" : ""}</span>
   </button>
 );
@@ -157,7 +157,7 @@ const LangLabel = ({ l }) => (
   </span>
 );
 const LangBtn = ({ lang, setLang }) => (
-  <button onClick={() => setLang(LANGS[(LANGS.indexOf(lang) + 1) % 3])} aria-label="Language" style={{ width: 52, height: 36, flexShrink: 0, background: C.card, border: "none", borderRadius: RAD, color: C.text, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><LangLabel l={lang} /></button>
+  <button onClick={() => setLang(LANGS[(LANGS.indexOf(lang) + 1) % 3])} aria-label={t(lang, "aLang")} style={{ width: 52, height: 36, flexShrink: 0, background: C.card, border: "none", borderRadius: RAD, color: C.text, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><LangLabel l={lang} /></button>
 );
 
 // One chapter of text. Memoised: it only redraws when its own inputs change, so the Reader can update the title while you
@@ -184,7 +184,7 @@ const Chapter = memo(function Chapter({ b, n, head, lang, size, favs, hls, sel, 
               </div>
             </div>
           );
-        }) : <div style={{ color: C.sub, fontFamily: sans, fontSize: 15 }}>{bibleReady(lang) ? "The full text for this chapter loads from your Bible files in the PWA build." : bibleFailed() ? "Couldn't load the Bible. Check your connection." : "Loading…"}</div>}
+        }) : <div style={{ color: C.sub, fontFamily: sans, fontSize: 15 }}>{bibleReady(lang) ? t(lang, "placeholder") : bibleFailed() ? t(lang, "failed") : t(lang, "loading")}</div>}
       </div>
     </section>
   );
@@ -331,13 +331,13 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
       if (mode === "select") {
         const m = mref.current; setM(null);
         const ks = commit && m ? selKeys(m) : [];
-        if (ks.length) { copyText(copyStr(ks)); say(ks.length > 1 ? `Copied ${ks.length} verses` : "Copied"); }
+        if (ks.length) { copyText(copyStr(ks)); say(ks.length > 1 ? nCopied(ks.length, act.current.lang) : t(act.current.lang, "copied")); }
       } else if (mode === "swipe") {
         release(row);
         if (commit && Math.abs(dx) >= COMMIT) {
           const a = act.current;
-          if (dx > 0) { const was = a.favs.includes(vk); a.toggleFav(vk); say(was ? "Removed from favourites" : "Added to favourites"); }
-          else { const was = !!a.hls[vk]; a.toggleHl(vk); say(was ? "Highlight removed" : "Highlighted"); }
+          if (dx > 0) { const was = a.favs.includes(vk); a.toggleFav(vk); say(t(a.lang, was ? "favOff" : "favOn")); }
+          else { const was = !!a.hls[vk]; a.toggleHl(vk); say(t(a.lang, was ? "hlOff" : "hlOn")); }
         }
       }
     };
@@ -361,13 +361,13 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
       <div data-hdr="1" style={{ flex: "0 0 auto", background: C.bg }}>
         <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(10px + ${TOP}) 20px 10px`, display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
-            <button onClick={close} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -22px", padding: "12px 9px 12px 16px" }}><Chev d="left" h={xh(17)} /></button>
+            <button onClick={close} aria-label={t(lang, "aBack")} style={{ ...backBtn, margin: "-12px 0 -12px -22px", padding: "12px 9px 12px 16px" }}><Chev d="left" h={xh(17)} /></button>
             <div style={{ fontFamily: sans, fontSize: 17, fontWeight: 600, color: C.accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(() => { const [tb, tn] = (cur && list.find(([b, n]) => b + " " + n === cur)) || item.ch[0]; return `${rn(tb, lang)} ${tn}`; })()}</div>
           </div>
           <div style={{ display: "flex", background: C.card, borderRadius: RAD, overflow: "hidden", flexShrink: 0 }}>
-            <button onClick={() => setSize(Math.max(10, size - 2))} aria-label="Smaller text" style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>−</button>
-            <button onClick={() => setLang(LANGS[(LANGS.indexOf(lang) + 1) % 3])} aria-label="Language" style={{ ...sec, width: 52, borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}` }}><LangLabel l={lang} /></button>
-            <button onClick={() => setSize(Math.min(28, size + 2))} aria-label="Larger text" style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>+</button>
+            <button onClick={() => setSize(Math.max(10, size - 2))} aria-label={t(lang, "aSmall")} style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>−</button>
+            <button onClick={() => setLang(LANGS[(LANGS.indexOf(lang) + 1) % 3])} aria-label={t(lang, "aLang")} style={{ ...sec, width: 52, borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}` }}><LangLabel l={lang} /></button>
+            <button onClick={() => setSize(Math.min(28, size + 2))} aria-label={t(lang, "aLarge")} style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>+</button>
           </div>
         </div>
       </div>
@@ -380,7 +380,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
           const k = b + " " + n, target = k === item.ch[0][0] + " " + item.ch[0][1];  // item.hl belongs to the opened chapter only
           return <Chapter key={k} b={b} n={n} head={browse ? !(b === ALL[0][0] && n === ALL[0][1]) : ci > 0} lang={lang} size={size} favs={favs} hls={hls} sel={menu && menu.ck === k ? menu : null} hlV={target ? item.hl : undefined} jumpV={target ? jump : undefined} ver={ver} />;
         })}
-        {!browse && <Pill onClick={advance}>{last ? "Done" : "Next"}</Pill>}
+        {!browse && <Pill onClick={advance}>{t(lang, last ? "done" : "next")}</Pill>}
       </div>
       </div>
       {toast && <div style={{ position: "fixed", left: 0, right: 0, bottom: `calc(40px + min(env(safe-area-inset-bottom, 0px), 20px) - ${GAP})`, display: "flex", justifyContent: "center", zIndex: 31, pointerEvents: "none" }}><div style={{ background: C.card2, color: C.text, fontSize: 14, fontFamily: sans, padding: "9px 16px", borderRadius: RAD }}>{toast}</div></div>}
@@ -412,13 +412,13 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
       </div>
     </div>
   );
-  const sub = lang === "en" ? "English Standard Version (ESV)" : lang === "ta" ? "Tamil Bible" : "ESV · Tamil Bible";
+  const sub = lang === "en" ? "English Standard Version (ESV)" : lang === "ta" ? t(lang, "sub") : "ESV · Tamil Bible";
 
   // the overlays keep their top bar fixed (head) and scroll only the content under it (body)
   const favsHead = showFavs && (
     <div style={{ display: "flex", alignItems: "baseline", marginBottom: 20 }}>
-      <button onClick={() => setShowFavs(false)} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(34)} /></button>
-      <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.8, margin: 0 }}>Favourites</h1>
+      <button onClick={() => setShowFavs(false)} aria-label={t(lang, "aBack")} style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(34)} /></button>
+      <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.8, margin: 0 }}>{t(lang, "favs")}</h1>
     </div>
   );
   const favsBody = showFavs && (favs.length ? (
@@ -429,15 +429,15 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
             <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{disp(b, lang)} {n}:{v}</div>
             {lines(x, false)}
           </div>
-          <button onClick={e => { e.stopPropagation(); toggleFav(k); }} aria-label="Remove favourite" style={{ background: "none", border: "none", color: C.accent, padding: 8, display: "flex", cursor: "pointer" }}>{Ico.heart(true)}</button>
+          <button onClick={e => { e.stopPropagation(); toggleFav(k); }} aria-label={t(lang, "aUnfav")} style={{ background: "none", border: "none", color: C.accent, padding: 8, display: "flex", cursor: "pointer" }}>{Ico.heart(true)}</button>
         </div>); })}
     </div>
-  ) : <div style={{ color: C.sub, textAlign: "center", padding: "40px 20px", lineHeight: 1.5 }}>Swipe a verse to the right to save it here.</div>);
+  ) : <div style={{ color: C.sub, textAlign: "center", padding: "40px 20px", lineHeight: 1.5 }}>{t(lang, "favHint")}</div>);
 
   const bookHead = book && (
     <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
-        <button onClick={() => setBook(null)} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(28)} /></button>
+        <button onClick={() => setBook(null)} aria-label={t(lang, "aBack")} style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(28)} /></button>
         <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0, color: C.accent }}>{disp(book, lang)}</h2>
       </div>
       <LangBtn lang={lang} setLang={setLang} />
@@ -453,18 +453,18 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     <>
     <div key="list" style={{ marginTop: TOP, height: `calc(${VH} - ${NAV} - ${TOP})`, overflowY: "auto", overflowX: "hidden", boxSizing: "border-box", padding: "28px 24px 32px" }}>  {/* starts below the status bar, so text never scrolls under the clock */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1, margin: 0 }}>{lang === "ta" ? "வேதாகமம்" : "Bible"}</h1>
+        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1, margin: 0 }}>{t(lang, "bible")}</h1>
         <LangBtn lang={lang} setLang={setLang} />
       </div>
       <div style={{ color: C.sub, fontSize: 13, margin: "0 0 24px" }}>{sub}</div>
       <div style={{ position: "relative", marginBottom: 20 }}>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search, or go to John 3:16" style={{ display: "block", width: "100%", boxSizing: "border-box", background: C.card, border: "none", borderRadius: RAD, height: 52, padding: "0 44px 0 16px", color: C.text, fontSize: 17, fontFamily: sans, outline: "none" }} />
-        {q && <button onClick={() => setQ("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", cursor: "pointer", color: C.sub }}><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="currentColor" /><path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke="#2c2c2e" strokeWidth="1.8" strokeLinecap="round" /></svg></button>}
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder={t(lang, "search")} style={{ display: "block", width: "100%", boxSizing: "border-box", background: C.card, border: "none", borderRadius: RAD, height: 52, padding: "0 44px 0 16px", color: C.text, fontSize: 17, fontFamily: sans, outline: "none" }} />
+        {q && <button onClick={() => setQ("")} aria-label={t(lang, "aClear")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", cursor: "pointer", color: C.sub }}><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="currentColor" /><path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke="#2c2c2e" strokeWidth="1.8" strokeLinecap="round" /></svg></button>}
       </div>
-      {total > 0 && <div style={{ color: C.sub, fontSize: 12, margin: "-10px 4px 14px" }}>{total === 1 ? "1 result" : `${total} results`}{total > hits.length ? ` · showing first ${hits.length}` : ""}</div>}
+      {total > 0 && <div style={{ color: C.sub, fontSize: 12, margin: "-10px 4px 14px" }}>{nResults(total, lang)}{total > hits.length ? showingFirst(hits.length, lang) : ""}</div>}
       {target ? (
         <div onClick={() => go({ ch: [[target.b, target.n]], hl: target.v })} style={{ background: C.card, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 20px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: 17 }}>
-          <span style={{ color: C.accent, fontWeight: 600 }}>Go to {disp(target.b, lang)} {target.n}{target.v ? ":" + target.v : ""}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
+          <span style={{ color: C.accent, fontWeight: 600 }}>{t(lang, "goTo")} {disp(target.b, lang)} {target.n}{target.v ? ":" + target.v : ""}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
         </div>
       ) : s.length > 1 ? (
         <div>
@@ -473,15 +473,15 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
               <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{disp(h.b, lang)} {h.n}:{h.v}</div>
               {lines(h, true)}
             </div>)}
-          </div> : <div style={{ color: C.sub, textAlign: "center", padding: "32px 0" }}>No results for “{s}”</div>}
-          {total > hits.length && <button onClick={() => setLimit(l => l + 60)} style={{ display: "block", margin: "6px auto 0", background: "none", border: "none", color: C.accent, fontSize: 14, fontFamily: sans, padding: "14px 20px", cursor: "pointer" }}>Show more</button>}
+          </div> : <div style={{ color: C.sub, textAlign: "center", padding: "32px 0" }}>{t(lang, "noResults")} “{s}”</div>}
+          {total > hits.length && <button onClick={() => setLimit(l => l + 60)} style={{ display: "block", margin: "6px auto 0", background: "none", border: "none", color: C.accent, fontSize: 14, fontFamily: sans, padding: "14px 20px", cursor: "pointer" }}>{t(lang, "more")}</button>}
         </div>
       ) : (<>
         <div onClick={() => setShowFavs(true)} style={{ border: `1px solid ${C.accent}`, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 19px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 17, marginBottom: 28 }}>
-          <span style={{ color: C.accent, display: "flex" }}>{Ico.heart(true)}</span><span style={{ flex: 1 }}>Favourites</span><span style={{ color: C.sub }}>{favs.length}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
+          <span style={{ color: C.accent, display: "flex" }}>{Ico.heart(true)}</span><span style={{ flex: 1 }}>{t(lang, "favs")}</span><span style={{ color: C.sub }}>{favs.length}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
         </div>
         {group(lang === "ta" ? "பழைய ஏற்பாடு" : "Old Testament", BOOKS.slice(0, 39), 0)}{group(lang === "ta" ? "புதிய ஏற்பாடு" : "New Testament", BOOKS.slice(39), 39)}
-        <div style={{ textAlign: "center", color: C.sub, fontSize: 13, padding: "4px 0 24px" }}>Created by Benjamin Hanigraf</div>
+        <div style={{ textAlign: "center", color: C.sub, fontSize: 13, padding: "4px 0 24px" }}>{t(lang, "by")}</div>
       </>)}
     </div>
     {(showFavs || book) && (
@@ -496,7 +496,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   );
 }
 
-function Calendar({ start, today, view, status, pick, close, mark }) {
+function Calendar({ lang, start, today, view, status, pick, close, mark }) {
   const b = addDays(start, view);
   const [ym, setYm] = useState([b.getFullYear(), b.getMonth()]);
   const [mdir, setMdir] = useState(0);
@@ -537,13 +537,13 @@ function Calendar({ start, today, view, status, pick, close, mark }) {
       <div style={{ maxWidth: 430, margin: "0 auto", padding: `calc(28px + ${TOP}) 24px calc(60px + min(env(safe-area-inset-bottom, 0px), 20px))` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "baseline", minWidth: 0 }}>
-          <button onClick={close} aria-label="Back" style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(30)} /></button>
-          <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.5, margin: 0 }}>{new Date(y, mo, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</h1>
+          <button onClick={close} aria-label={t(lang, "aBack")} style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(30)} /></button>
+          <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.5, margin: 0 }}>{monthYear(y, mo, lang)}</h1>
           </div>
           
         </div>
         <div key={`${y}-${mo}`} ref={gridRef} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", rowGap: 8, textAlign: "center", animation: mdir ? `${mdir > 0 ? "wInR" : "wInL"} .28s cubic-bezier(.2,.8,.2,1)` : "none" }}>
-          {"SMTWTFS".split("").map((l, i) => <div key={i} style={{ color: C.accent, fontSize: 13, paddingBottom: 6 }}>{l}</div>)}
+          {dayLetters(lang).map((l, i) => <div key={i} style={{ color: C.accent, fontSize: 13, paddingBottom: 6 }}>{l}</div>)}
           {cells.map((d, i) => {
             if (!d) return <div key={i} />;
             const ds = iso(new Date(y, mo, d)), dn = dayDiff(ds, start), inn = dn >= 0 && dn < planLen(), s = inn ? status(dn) : "out";
@@ -644,12 +644,12 @@ export default function App() {
   if (!start) return (
     <div style={{ ...shell, display: "flex", flexDirection: "column", justifyContent: "center", gap: 48, paddingBottom: 48 }}>
       <style>{CSS}</style>
-      <h1 style={{ fontSize: 48, fontWeight: 700, letterSpacing: -1.5, margin: 0 }}>Read</h1>
+      <h1 style={{ fontSize: 48, fontWeight: 700, letterSpacing: -1.5, margin: 0 }}>{t(lang, "app")}</h1>
       <div style={{ background: C.card, borderRadius: RAD, padding: "6px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 17 }}>Start date</span>
+        <span style={{ fontSize: 17 }}>{t(lang, "startDate")}</span>
         <input type="date" value={draft} onChange={e => setDraft(e.target.value)} style={{ background: "none", border: "none", color: C.text, fontSize: 17, fontFamily: sans, colorScheme: "dark", padding: "14px 0" }} />
       </div>
-      <Pill onClick={() => { if (!okStart(draft)) return; setStart(draft); setView(Math.max(0, dayDiff(today, draft))); }}>Begin</Pill>
+      <Pill onClick={() => { if (!okStart(draft)) return; setStart(draft); setView(Math.max(0, dayDiff(today, draft))); }}>{t(lang, "begin")}</Pill>
     </div>
   );
 
@@ -660,7 +660,7 @@ export default function App() {
   let items = dayItems(n);
   const finished = items.filter(i => done[i.key]).length;
   const next = items.find(i => !done[i.key]);
-  const dateStr = longDate(addDays(start, n));
+  const dateStr = longDate(addDays(start, n), lang);
 
   const seen = {};
   Object.keys(done).filter(k => done[k]).forEach(k => { const [d, tr] = k.split(":").map(Number); chaptersFor(tr, readIdx(d)).forEach(([b, c]) => { (seen[b] = seen[b] || new Set()).add(c); }); });
@@ -679,7 +679,7 @@ export default function App() {
   const canWeek = o => { if (o === 0) return true; const dn0 = dayDiff(iso(addDays(today, 7 * o - dow)), start); return dn0 + 6 >= 0 && dn0 < planLen(); };
   const renderWeek = cells => cells.map((c, i) => (
     <div key={i} style={{ flex: 1, textAlign: "center" }}>
-      <div style={{ color: C.accent, fontSize: 11, marginBottom: 6 }}>{"SMTWTFS"[i]}</div>
+      <div style={{ color: C.accent, fontSize: 11, marginBottom: 6 }}>{dayLetters(lang)[i]}</div>
       {c.inn ? (
         <DayRing frac={c.frac} size={rs} onClick={e => { e.stopPropagation(); setView(c.dn); }} style={{ margin: "0 auto", cursor: "pointer" }}>
           <div style={{ width: rs - 10, height: rs - 10, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: c.today ? 700 : 500, background: c.today ? C.accent : c.dn === n ? SELECTED_DAY : "transparent", color: c.today ? ON_ACCENT : C.text }}>{c.d}</div>
@@ -696,7 +696,7 @@ export default function App() {
           <Art i={artI} onTap={() => setArtTap(k => k + 1)} />
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-              {[[`${Math.round(chaptersDone / TOTAL * 100)}%`, "of the Bible"], [booksDone || "-", "books read"], [streak, "day streak"]].map(([v, l]) => (
+              {[[`${Math.round(chaptersDone / TOTAL * 100)}%`, t(lang, "ofBible")], [booksDone || "-", t(lang, "booksRead")], [streak, t(lang, "streak")]].map(([v, l]) => (
                 <div key={l} style={{ background: C.card, borderRadius: RAD, padding: `${cl(12, 1.8, 18)} 14px` }}>
                   <div style={{ fontSize: cl(24, 3.5, 30), fontWeight: 700, letterSpacing: -0.4 }}>{v}</div>
                   <div style={{ color: C.sub, fontSize: 12, marginTop: 1 }}>{l}</div>
@@ -712,7 +712,7 @@ export default function App() {
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div>
-                <div style={{ color: C.sub, fontSize: 13, height: 17, marginBottom: 2 }}>{catchUp ? "Catch-up" : ""}</div>
+                <div style={{ color: C.sub, fontSize: 13, height: 17, marginBottom: 2 }}>{catchUp ? t(lang, "catchUp") : ""}</div>
                 <h1 style={{ fontSize: cl(20, 2.9, 26), fontWeight: 700, letterSpacing: -0.5, margin: 0, whiteSpace: "nowrap", lineHeight: 1.2 }}>{dateStr}</h1>
               </div>
             </div>
@@ -722,9 +722,9 @@ export default function App() {
               <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
                 {items.map((it, i) => (
                   <div key={it.key} onClick={() => setOpen(it)} style={{ display: "flex", alignItems: "center", gap: 12, height: ROWH, boxSizing: "border-box", padding: "0 14px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
-                    <Check on={!!done[it.key]} onClick={() => toggle(it.key)} />
+                    <Check lang={lang} on={!!done[it.key]} onClick={() => toggle(it.key)} />
                     <div style={{ flex: 1, opacity: done[it.key] ? 0.45 : 1 }}>
-                      {catchUp && <div style={{ color: C.sub, fontSize: 12, marginBottom: 1 }}>{addDays(start, it.n).toLocaleDateString("en-GB", { weekday: "long" })}</div>}
+                      {catchUp && <div style={{ color: C.sub, fontSize: 12, marginBottom: 1 }}>{weekdayName(addDays(start, it.n), lang)}</div>}
                       <div style={{ fontSize: cl(16, 2.1, 18), fontWeight: 400 }}>{label(it.ch, lang)}</div>
                     </div>
                     <span style={{ color: C.sub, display: "flex", fontSize: 16 }}><Chev /></span>
@@ -733,26 +733,26 @@ export default function App() {
               </div>
             ) : (
               <div style={{ background: C.card, borderRadius: RAD, padding: "24px 20px", textAlign: "center", color: C.sub, fontSize: 15, lineHeight: 1.5 }}>
-                {catchUp ? "A day to rest. Open any unfinished day from the calendar." : "The plan is complete."}
+                {t(lang, catchUp ? "restDay" : "planDone")}
               </div>
             )}
             </div>
 
             {/* the button sits exactly halfway between the end of the list and the bottom bar */}
-            <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", visibility: items.length ? "visible" : "hidden" }}><div style={{ width: "100%" }}><Pill ghost={!next} onClick={() => (next ? setOpen(next) : readAhead())}>{next ? (finished ? "Continue" : "Start") : "Read next portion"}</Pill></div></div>
+            <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", visibility: items.length ? "visible" : "hidden" }}><div style={{ width: "100%" }}><Pill ghost={!next} onClick={() => (next ? setOpen(next) : readAhead())}>{next ? t(lang, finished ? "cont" : "start") : t(lang, "nextPortion")}</Pill></div></div>
           </div>
         </div>
       )}
 
       <nav style={{ position: "fixed", bottom: `calc(${GAP} * -1)`, left: 0, right: 0, zIndex: 5, background: C.bg, borderTop: `1px solid ${C.line}`, height: NAV, boxSizing: "border-box", visibility: kb ? "hidden" : "visible" }}>
         <div style={{ maxWidth: 430, margin: "0 auto", display: "flex" }}>
-          {[["today", "Today"], ["bible", "Bible"]].map(([k, l]) => (
+          {[["today", t(lang, "today")], ["bible", t(lang, "bible")]].map(([k, l]) => (
             <button key={k} onClick={() => { setTab(k); setWeekOff(0); if (k === "today") setView(todayN); }} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "9px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, color: tab === k ? C.accent : C.sub, fontFamily: sans, fontSize: 11, fontWeight: 500 }}>{ICONS[k]}{l}</button>
           ))}
         </div>
       </nav>
 
-      {cal && <Calendar mark={markDay} start={start} today={today} view={n} status={dayStatus} close={() => setCal(false)} pick={d => { setView(d); setCal(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} />}
+      {cal && <Calendar lang={lang} mark={markDay} start={start} today={today} view={n} status={dayStatus} close={() => setCal(false)} pick={d => { setView(d); setCal(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} />}
       {open && <Reader item={open} size={size} setSize={setSize} lang={lang} setLang={setLang} favs={favs} hls={hls} toggleFav={toggleFav} toggleHl={toggleHl} close={() => setOpen(null)} go={setOpen} last={!open.key || !nextAfter(open.key)} advance={() => { if (open.key && !done[open.key]) toggle(open.key); setOpen((open.key && nextAfter(open.key)) || null); }} />}
     </div>
   );
