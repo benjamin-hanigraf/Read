@@ -4,7 +4,7 @@ import { t, dayLetters, weekdayName, longDate, monthYear, nResults, showingFirst
 
 import { ARTS } from "./data/arts.js";
 import { TA_NAMES } from "./data/names.js";
-import { ACCENT, accentA, NEUTRAL, ON_ACCENT, TAMIL_DIM, DISABLED, SELECTED_DAY, PLACEHOLDER } from "./theme.js";
+import { ACCENT, accentA, NEUTRAL, ON_ACCENT, TAMIL_DIM, DISABLED, SELECTED_DAY, PLACEHOLDER, SEPARATOR } from "./theme.js";
 import { OT, WIS, NT, BOOKS } from "./data/books.js";
 import { CH, searchBible, useBible, bibleReady, bibleFailed } from "./data/bible.js";
 
@@ -194,7 +194,7 @@ const Chapter = memo(function Chapter({ b, n, head, lang, size, favs, hls, sel, 
 });
 
 function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, favs, hls, toggleFav, toggleHl }) {
-  const mw = useLand() ? 640 : 430;
+  const land = useLand(), mw = land ? "none" : 430, sideL = "max(20px, env(safe-area-inset-left, 0px))", sideR = "max(20px, env(safe-area-inset-right, 0px))";
   const ver = useBible();
   const ref = useRef(null), sc = useRef(null);  // ref: the whole screen (slides away on swipe-back), sc: the scrolling text under the fixed top bar
   const browse = !item.key;
@@ -243,10 +243,10 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
     const keep = () => { const top = el.getBoundingClientRect().top, x = [...el.querySelectorAll("[data-vk]")].find(q => q.getBoundingClientRect().bottom > top + 1); anchor.current = x ? { key: x.getAttribute("data-vk"), top: x.getBoundingClientRect().top } : null; };
     const swap = l => { pend.current = true; keep(); flushSync(() => setList(l)); };
     const grow = resting => {
-      if (!browse || !bibleReady(lang) || pend.current || (resting && (touching.current || el.scrollTop !== lastTop))) return;  // nothing above you changes while a finger is down or the text is still moving
+      if (!browse || !bibleReady(lang) || pend.current || (resting && touching.current)) return;  // nothing above you changes while a finger is down or the text is still moving
       const first = idxOf(list[0]), last = idxOf(list[list.length - 1]), toTop = el.scrollTop, toEnd = el.scrollHeight - el.scrollTop - el.clientHeight;
       if (toEnd < AHEAD && last < ALL.length - 1 && list.length < MAXHARD) { pend.current = true; setList([...list, ...ALL.slice(last + 1, last + 3)]); }
-      else if (first > 0 && (resting && toTop < ABOVE)) swap([...ALL.slice(Math.max(0, first - 4), first), ...list]);  // 4 at a time: fewer corrections
+      else if (first > 0 && (resting && toTop < ABOVE)) swap([...ALL.slice(Math.max(0, first - 2), first), ...list]);  // 2 at a time: each redraw is short, so a new touch is never kept waiting
       else if (resting) {  // drop chapters that are far beyond the loaded margin (nothing near you moves)
         const er = el.getBoundingClientRect(), secs = [...el.querySelectorAll("[data-sec]")], at = x => { const r = x.getBoundingClientRect(); return [r.top - er.top + el.scrollTop, r.bottom - er.top + el.scrollTop]; };
         let d0 = 0, d1 = 0;
@@ -255,9 +255,19 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
         if (d0 || d1) swap(list.slice(d0, list.length - d1));
       }
     };
-    let idle = 0, lastTop = -1;
+    // "At rest" is judged frame by frame, not by a timer: the text must have stood on exactly the same pixel for 8 frames in a
+    // row, none of them late, and no finger down. A timer can fire while a fling is still running (a busy page delays the scroll
+    // events), and correcting the position from stale numbers is what made the text jump far. A late frame starts the count again.
+    let raf = 0, still = 0, lastY = -1, lastT = 0, dead = false;
+    const step = now => {
+      raf = 0; if (dead) return;
+      const y = el.scrollTop, late = now - lastT > 40; lastT = now;
+      if (y === lastY && !late && !touching.current) still++; else { still = 0; lastY = y; }
+      if (still >= 8) { still = 0; grow(true); if (pend.current) return; raf = 0; return; }
+      raf = requestAnimationFrame(step);
+    };
+    const watch = () => { if (raf || dead) return; still = 0; lastY = el.scrollTop; lastT = performance.now(); raf = requestAnimationFrame(step); };
     const upd = () => {
-      lastTop = el.scrollTop;
       if (!touched.current && Math.abs(el.scrollTop - placed.current) > 24) touched.current = true;  // you moved it (touch, wheel, keys, scrollbar...)
       const hb = ref.current.querySelector("[data-hdr]").getBoundingClientRect().bottom, secs = el.querySelectorAll("[data-sec]");
       if (!secs.length) return;
@@ -266,13 +276,13 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
       if (atEnd && (!browse || idxOf(list[list.length - 1]) === ALL.length - 1)) a = secs.length - 1;  // at the very end you are in the last chapter
       setCur(secs[a].getAttribute("data-key"));
       grow(false);
-      clearTimeout(idle); idle = setTimeout(() => grow(true), 120);  // 120 ms without scrolling = at rest
+      watch();
     };
-    const wheel = () => { touched.current = true; }, mark = () => { touched.current = true; touching.current = true; }, lift = () => { touching.current = false; clearTimeout(idle); idle = setTimeout(() => grow(true), 200); };
+    const wheel = () => { touched.current = true; }, mark = () => { touched.current = true; touching.current = true; watch(); }, lift = () => { touching.current = false; watch(); };
     el.addEventListener("scroll", upd, { passive: true }); el.addEventListener("touchstart", mark, { passive: true }); el.addEventListener("wheel", wheel, { passive: true });
     el.addEventListener("touchend", lift); el.addEventListener("touchcancel", lift);
-    let dead = false; Promise.resolve().then(() => { if (!dead) upd(); });  // not inside the effect itself: the first look may redraw the list at once
-    return () => { dead = true; clearTimeout(idle); touching.current = false; el.removeEventListener("scroll", upd); el.removeEventListener("touchstart", mark); el.removeEventListener("wheel", wheel); el.removeEventListener("touchend", lift); el.removeEventListener("touchcancel", lift); };
+    Promise.resolve().then(() => { if (!dead) { upd(); watch(); } });  // not inside the effect itself: the first look may redraw the list at once
+    return () => { dead = true; cancelAnimationFrame(raf); touching.current = false; el.removeEventListener("scroll", upd); el.removeEventListener("touchstart", mark); el.removeEventListener("wheel", wheel); el.removeEventListener("touchend", lift); el.removeEventListener("touchcancel", lift); };
   }, [item, ver, list, lang]);
 
   const say = m => { setToast(m); clearTimeout(tt.current); tt.current = setTimeout(() => setToast(""), 1300); };
@@ -363,7 +373,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   return (
     <div ref={ref} style={{ position: "fixed", inset: FIT, background: C.bg, zIndex: 10, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y" }}>
       <div data-hdr="1" style={{ flex: "0 0 auto", background: C.bg }}>
-        <div style={{ maxWidth: mw, margin: "0 auto", padding: `calc(10px + ${TOP}) 20px 10px`, display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ maxWidth: mw, margin: "0 auto", padding: `calc(10px + ${TOP}) ${sideR} 10px ${sideL}`, display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline" }}>
             <button onClick={close} aria-label={t(lang, "aBack")} style={{ ...backBtn, margin: "-12px 0 -12px -22px", padding: "12px 9px 12px 16px" }}><Chev d="left" h={xh(17)} /></button>
             <div style={{ fontFamily: sans, fontSize: 17, fontWeight: 600, color: C.accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(() => { const [tb, tn] = (cur && list.find(([b, n]) => b + " " + n === cur)) || item.ch[0]; return `${rn(tb, lang)} ${tn}`; })()}</div>
@@ -375,8 +385,8 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
           </div>
         </div>
       </div>
-      <div ref={sc} style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: browse ? "none" : "contain" }}>
-      <div data-cw="1" key={item.ch.map(c => c.join(" ")).join("|")} style={{ position: "relative", maxWidth: mw, margin: "0 auto", padding: browse ? "40px 28px calc(80px + min(env(safe-area-inset-bottom, 0px), 20px))" : "40px 28px calc(40px + min(env(safe-area-inset-bottom, 0px), 20px))" }}>
+      <div ref={sc} style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: browse && !list.some(c => idxOf(c) === 0 || idxOf(c) === ALL.length - 1) ? "none" : "contain" }}>
+      <div data-cw="1" key={item.ch.map(c => c.join(" ")).join("|")} style={{ position: "relative", maxWidth: mw, margin: "0 auto", padding: browse ? "40px max(28px, env(safe-area-inset-right, 0px)) calc(80px + min(env(safe-area-inset-bottom, 0px), 20px)) max(28px, env(safe-area-inset-left, 0px))" : "40px max(28px, env(safe-area-inset-right, 0px)) calc(40px + min(env(safe-area-inset-bottom, 0px), 20px)) max(28px, env(safe-area-inset-left, 0px))" }}>
         {/* the two icons shown behind a verse while you swipe it; one pair for the whole page, moved to the verse being swiped */}
         <div data-ih="1" style={{ position: "absolute", left: 6, top: 0, height: 0, display: "flex", alignItems: "center", color: C.accent, opacity: 0, pointerEvents: "none" }}>{Ico.heart(true)}</div>
         <div data-ip="1" style={{ position: "absolute", right: 6, top: 0, height: 0, display: "flex", alignItems: "center", color: C.accent, opacity: 0, pointerEvents: "none" }}>{Ico.pen(false)}</div>
@@ -393,7 +403,7 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
 }
 
 function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
-  const land = useLand(), mw = land ? 640 : 430;
+  const land = useLand(), mw = land ? "none" : 430;
   const ver = useBible();
   const [q, setQ] = useState("");
   const [book, setBook] = useState(null);
@@ -412,8 +422,8 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   const group = (title, list, off) => (
     <div style={{ marginBottom: 28 }}>
       <div style={{ color: C.accent, fontSize: lang === "ta" ? 17 : 13, fontWeight: 600, letterSpacing: lang === "ta" ? 0 : 0.6, textTransform: "uppercase", margin: "0 8px 8px" }}>{title}</div>
-      <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
-        {list.map(([b, cnt], i) => <div key={b} onClick={() => (cnt === 1 ? go({ ch: [[b, 1]] }) : setBook(b))} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 52, boxSizing: "border-box", padding: "0 20px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer", fontSize: 17 }}><span>{disp(b, lang)}</span><span style={{ color: C.sub, display: "flex", alignItems: "center", gap: 10 }}>{lang === "both" && <span style={{ fontSize: 15 }}>{TA_NAMES[off + i]}</span>}<Chev /></span></div>)}
+      <div style={{ borderBottom: `1px solid ${SEPARATOR}` }}>
+        {list.map(([b, cnt], i) => <div key={b} onClick={() => (cnt === 1 ? go({ ch: [[b, 1]] }) : setBook(b))} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 52, boxSizing: "border-box", padding: "0 8px", borderTop: `1px solid ${SEPARATOR}`, cursor: "pointer", fontSize: 17 }}><span>{disp(b, lang)}</span><span style={{ color: C.sub, display: "flex", alignItems: "center", gap: 10 }}>{lang === "both" && <span style={{ fontSize: 15 }}>{TA_NAMES[off + i]}</span>}<Chev /></span></div>)}
       </div>
     </div>
   );
@@ -454,18 +464,19 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     </div>
   );
 
-  return (
-    <>
-    <div key="list" style={{ marginTop: TOP, height: `calc(${VH} - ${NAV} - ${TOP})`, overflowY: "auto", overflowX: "hidden", boxSizing: "border-box", padding: "28px 24px 32px" }}>  {/* starts below the status bar, so text never scrolls under the clock */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1, margin: 0 }}>{t(lang, "bible")}</h1>
-        <LangBtn lang={lang} setLang={setLang} />
-      </div>
-      <div style={{ color: C.sub, fontSize: 13, margin: "0 0 24px" }}>{sub}</div>
-      <div style={{ position: "relative", marginBottom: 20 }}>
-        <input value={q} onChange={e => setQ(e.target.value)} enterKeyHint={target ? "go" : "search"} onKeyDown={e => { if (e.key !== "Enter" || e.nativeEvent.isComposing) return; e.preventDefault(); if (target) go({ ch: [[target.b, target.n]], hl: target.v }); else e.currentTarget.blur(); }} placeholder={t(lang, "search")} style={{ display: "block", width: "100%", boxSizing: "border-box", background: C.card, border: "none", borderRadius: RAD, height: 52, padding: "0 44px 0 16px", color: C.text, fontSize: 17, fontFamily: sans, outline: "none" }} />
-        {q && <button onClick={() => setQ("")} aria-label={t(lang, "aClear")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", cursor: "pointer", color: C.sub }}><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="currentColor" /><path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke="#2c2c2e" strokeWidth="1.8" strokeLinecap="round" /></svg></button>}
-      </div>
+  const searching = !!target || s.length > 1;
+  const searchBox = (
+    <div style={{ position: "relative", marginBottom: land ? 0 : 20, flex: land ? 1 : undefined, minWidth: 0 }}>
+      <input value={q} onChange={e => setQ(e.target.value)} enterKeyHint={target ? "go" : "search"} onKeyDown={e => { if (e.key !== "Enter" || e.nativeEvent.isComposing) return; e.preventDefault(); if (target) go({ ch: [[target.b, target.n]], hl: target.v }); else e.currentTarget.blur(); }} placeholder={t(lang, "search")} style={{ display: "block", width: "100%", boxSizing: "border-box", background: C.card, border: "none", borderRadius: RAD, height: 52, padding: "0 44px 0 16px", color: C.text, fontSize: 17, fontFamily: sans, outline: "none" }} />
+      {q && <button onClick={() => setQ("")} aria-label={t(lang, "aClear")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", cursor: "pointer", color: C.sub }}><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="currentColor" /><path d="M6.5 6.5l7 7M13.5 6.5l-7 7" stroke="#2c2c2e" strokeWidth="1.8" strokeLinecap="round" /></svg></button>}
+    </div>
+  );
+  const favRow = (
+    <div onClick={() => setShowFavs(true)} style={{ border: `0.5px solid ${accentA(.7)}`, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 19px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 17, marginBottom: land ? 0 : 28, width: land ? 180 : undefined, flexShrink: 0 }}>
+          <span style={{ color: C.accent, display: "flex" }}>{Ico.heart(true)}</span><span style={{ flex: 1 }}>{t(lang, "favs")}</span><span style={{ color: C.sub }}>{favs.length}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
+        </div>
+  );
+  const found = (<>
       {total > 0 && <div style={{ color: C.sub, fontSize: 12, margin: "-10px 4px 14px" }}>{nResults(total, lang)}{total > hits.length ? showingFirst(hits.length, lang) : ""}</div>}
       {target ? (
         <div onClick={() => go({ ch: [[target.b, target.n]], hl: target.v })} style={{ background: C.card, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 20px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: 17 }}>
@@ -481,19 +492,46 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
           </div> : <div style={{ color: C.sub, textAlign: "center", padding: "32px 0" }}>{t(lang, "noResults")} “{s}”</div>}
           {total > hits.length && <button onClick={() => setLimit(l => l + 60)} style={{ display: "block", margin: "6px auto 0", background: "none", border: "none", color: C.accent, fontSize: 14, fontFamily: sans, padding: "14px 20px", cursor: "pointer" }}>{t(lang, "more")}</button>}
         </div>
-      ) : (<>
-        <div onClick={() => setShowFavs(true)} style={{ border: `1px solid ${C.accent}`, borderRadius: RAD, height: 52, boxSizing: "border-box", padding: "0 19px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 17, marginBottom: 28 }}>
-          <span style={{ color: C.accent, display: "flex" }}>{Ico.heart(true)}</span><span style={{ flex: 1 }}>{t(lang, "favs")}</span><span style={{ color: C.sub }}>{favs.length}</span><span style={{ color: C.sub, display: "flex" }}><Chev /></span>
+      ) : null}
+  </>);
+  const OT = group(lang === "ta" ? "பழைய ஏற்பாடு" : "Old Testament", BOOKS.slice(0, 39), 0), NT = group(lang === "ta" ? "புதிய ஏற்பாடு" : "New Testament", BOOKS.slice(39), 39);
+  const byLine = <div style={{ textAlign: "center", color: C.sub, fontSize: 13, padding: "4px 0 24px" }}>{t(lang, "by")}</div>;
+  const SIDE_L = "max(24px, env(safe-area-inset-left, 0px))", SIDE_R = "max(24px, env(safe-area-inset-right, 0px))";
+  return (
+    <>
+    {land ? (
+      <div key="list" style={{ marginTop: TOP, height: `calc(${VH} - ${NAV} - ${TOP})`, boxSizing: "border-box", padding: `14px ${SIDE_R} 0 ${SIDE_L}`, display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flex: "0 0 auto", marginBottom: 14 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5, margin: 0 }}>{t(lang, "bible")}</h1>
+          {searchBox}{favRow}<LangBtn lang={lang} setLang={setLang} />
         </div>
-        {group(lang === "ta" ? "பழைய ஏற்பாடு" : "Old Testament", BOOKS.slice(0, 39), 0)}{group(lang === "ta" ? "புதிய ஏற்பாடு" : "New Testament", BOOKS.slice(39), 39)}
-        <div style={{ textAlign: "center", color: C.sub, fontSize: 13, padding: "4px 0 24px" }}>{t(lang, "by")}</div>
+        {searching ? <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", paddingBottom: 24 }}>{found}</div> : (
+          <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 28 }}>
+            <div style={{ overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>{OT}</div>
+            <div style={{ overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>{NT}{byLine}</div>
+          </div>
+        )}
+      </div>
+    ) : (
+    <div key="list" style={{ marginTop: TOP, height: `calc(${VH} - ${NAV} - ${TOP})`, overflowY: "auto", overflowX: "hidden", boxSizing: "border-box", padding: "28px 24px 32px" }}>  {/* starts below the status bar, so text never scrolls under the clock */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1, margin: 0 }}>{t(lang, "bible")}</h1>
+        <LangBtn lang={lang} setLang={setLang} />
+      </div>
+      <div style={{ color: C.sub, fontSize: 13, margin: "0 0 24px" }}>{sub}</div>
+      {searchBox}
+      {searching ? found : (<>
+        {favRow}
+        {OT}{NT}
+        {byLine}
       </>)}
     </div>
+    )}
     {(showFavs || book) && (
       <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: `0 0 calc(${NAV} - ${GAP}) 0`, zIndex: 4, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
-        <div style={{ flex: "0 0 auto", maxWidth: mw, width: "100%", margin: "0 auto", boxSizing: "border-box", padding: `calc(28px + ${TOP}) 24px 0` }}>{showFavs ? favsHead : bookHead}</div>
+        <div style={{ flex: "0 0 auto", maxWidth: mw, width: "100%", margin: "0 auto", boxSizing: "border-box", padding: `calc(28px + ${TOP}) max(24px, env(safe-area-inset-right, 0px)) 0 max(24px, env(safe-area-inset-left, 0px))` }}>{showFavs ? favsHead : bookHead}</div>
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
-          <div style={{ maxWidth: mw, margin: "0 auto", padding: "0 24px 32px" }}>{showFavs ? favsBody : bookBody}</div>
+          <div style={{ maxWidth: mw, margin: "0 auto", padding: "0 max(24px, env(safe-area-inset-right, 0px)) 32px max(24px, env(safe-area-inset-left, 0px))" }}>{showFavs ? favsBody : bookBody}</div>
         </div>
       </div>
     )}
@@ -540,7 +578,7 @@ function Calendar({ lang, start, today, view, status, pick, close, mark }) {
   const arrow = { background: "none", border: "none", color: C.accent, fontSize: 26, cursor: "pointer", padding: "6px 10px", display: "inline-flex", alignItems: "center", fontSize: 22 };
   return (
     <div ref={rootRef} onTouchStart={e => { sw.current = [e.touches[0].clientX, e.touches[0].clientY]; }} onTouchEnd={e => { const s0 = sw.current; sw.current = null; if (!s0 || s0[0] < 28 || ps.current.on || ps.current.quiet) return; const dx = e.changedTouches[0].clientX - s0[0], dy = e.changedTouches[0].clientY - s0[1]; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1); }} style={{ position: "fixed", inset: FIT, background: C.bg, zIndex: 20, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
-      <div style={{ maxWidth: land ? 640 : 430, margin: "0 auto", padding: `calc(28px + ${TOP}) 24px calc(60px + min(env(safe-area-inset-bottom, 0px), 20px))` }}>
+      <div style={{ maxWidth: land ? "none" : 430, margin: "0 auto", padding: `calc(28px + ${TOP}) max(24px, env(safe-area-inset-right, 0px)) calc(60px + min(env(safe-area-inset-bottom, 0px), 20px))` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "baseline", minWidth: 0 }}>
           <button onClick={close} aria-label={t(lang, "aBack")} style={{ ...backBtn, margin: "-12px 0 -12px -16px", padding: "12px 10px 12px 16px" }}><Chev d="left" h={xh(30)} /></button>
@@ -646,7 +684,7 @@ export default function App() {
   const toggle = k => setDone(d => ({ ...d, [k]: !d[k] }));
 
   const land = useLand();
-  const shell = { maxWidth: land ? (tab === "today" ? 860 : 640) : 430, margin: "0 auto", minHeight: "100vh", background: C.bg, color: C.text, fontFamily: sans, padding: `${TOP} max(24px, env(safe-area-inset-right, 0px)) ${NAVPAD} max(24px, env(safe-area-inset-left, 0px))`, boxSizing: "border-box", overflowX: "hidden" };
+  const shell = { maxWidth: land ? "none" : 430, margin: "0 auto", minHeight: "100vh", background: C.bg, color: C.text, fontFamily: sans, padding: `${TOP} max(24px, env(safe-area-inset-right, 0px)) ${NAVPAD} max(24px, env(safe-area-inset-left, 0px))`, boxSizing: "border-box", overflowX: "hidden" };
 
   if (!start) return (
     <div style={{ ...shell, display: "flex", flexDirection: "column", justifyContent: "center", gap: 48, paddingBottom: 48 }}>
@@ -728,9 +766,9 @@ export default function App() {
 
             <div style={{ height: `calc(3 * ${ROWH})`, overflow: "hidden", flexShrink: 0 }}>
             {items.length ? (
-              <div style={{ background: C.card, borderRadius: RAD, overflow: "hidden" }}>
+              <div style={{ borderBottom: `1px solid ${SEPARATOR}` }}>
                 {items.map((it, i) => (
-                  <div key={it.key} onClick={() => setOpen(it)} style={{ display: "flex", alignItems: "center", gap: 12, height: ROWH, boxSizing: "border-box", padding: "0 14px", borderTop: i ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
+                  <div key={it.key} onClick={() => setOpen(it)} style={{ display: "flex", alignItems: "center", gap: 12, height: ROWH, boxSizing: "border-box", padding: "0 4px", borderTop: `1px solid ${SEPARATOR}`, cursor: "pointer" }}>
                     <Check lang={lang} on={!!done[it.key]} onClick={() => toggle(it.key)} />
                     <div style={{ flex: 1, opacity: done[it.key] ? 0.45 : 1 }}>
                       {catchUp && <div style={{ color: C.sub, fontSize: 12, marginBottom: 1 }}>{weekdayName(addDays(start, it.n), lang)}</div>}
@@ -753,8 +791,8 @@ export default function App() {
         </div>
       )}
 
-      <nav style={{ position: "fixed", bottom: `calc(${GAP} * -1)`, left: 0, right: 0, zIndex: 5, background: C.bg, borderTop: `1px solid ${C.line}`, height: NAV, boxSizing: "border-box", visibility: kb ? "hidden" : "visible" }}>
-        <div style={{ maxWidth: 430, margin: "0 auto", display: "flex" }}>
+      <nav style={{ position: "fixed", bottom: `calc(${GAP} * -1)`, left: 0, right: 0, zIndex: 5, background: C.bg, height: NAV, boxSizing: "border-box", visibility: kb ? "hidden" : "visible" }}>
+        <div style={{ maxWidth: land ? "none" : 430, margin: "0 auto", display: "flex" }}>
           {[["today", t(lang, "today")], ["bible", t(lang, "bible")]].map(([k, l]) => (
             <button key={k} onClick={() => { setTab(k); setWeekOff(0); if (k === "today") setView(todayN); }} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: land ? 0 : "9px 0 8px", display: "flex", flexDirection: land ? "row" : "column", alignItems: "center", justifyContent: land ? "center" : undefined, gap: land ? 8 : 5, height: land ? 40 : undefined, color: tab === k ? C.accent : C.sub, fontFamily: sans, fontSize: 11, fontWeight: 500 }}>{ICONS[k]}{l}</button>
           ))}

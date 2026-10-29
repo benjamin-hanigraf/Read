@@ -23,13 +23,24 @@ for (const t of ["gesturestart", "gesturechange", "gestureend"]) document.addEve
 
 // Some iOS versions report a layout viewport shorter than the screen (47px short on an iPhone 13). Everything anchored to the
 // bottom then floats above the real bottom. Measure the shortfall into --gap; the layout adds it back (see GAP/VH in App.jsx).
+// While the phone is turning, iOS reports the OLD size for a moment: those readings are ignored (they are what once pushed the
+// bottom bar half off the screen), and the measurement is repeated until the new size has settled.
 const syncGap = () => {
-  const standalone = navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
-  const seen = Math.max(innerHeight, window.visualViewport ? window.visualViewport.height : 0), g = standalone && innerHeight >= innerWidth ? Math.max(screen.width, screen.height) - seen : 0;
-  document.documentElement.style.setProperty("--gap", (g > 8 && g < 80 ? Math.round(g) : 0) + "px");
+  const root = document.documentElement, portrait = matchMedia("(orientation: portrait)").matches;
+  if (!portrait) { root.style.setProperty("--gap", "0px"); return; }  // sideways: the layout is exact
+  if (innerHeight < innerWidth) return;  // still the old (sideways) size: wait for the next reading
+  const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  const seen = Math.max(innerHeight, window.visualViewport ? window.visualViewport.height : 0), g = standalone ? Math.max(screen.width, screen.height) - seen : 0;
+  root.style.setProperty("--gap", (g > 8 && g < 80 ? Math.round(g) : 0) + "px");
+};
+let settle = [];
+const turned = () => {
+  syncGap(); settle.forEach(clearTimeout);
+  settle = [60, 200, 500, 1000, 1800].map(ms => setTimeout(() => { syncGap(); window.scrollTo(0, 0); }, ms));
 };
 syncGap();
-for (const t of ["resize", "orientationchange", "pageshow", "focus"]) window.addEventListener(t, syncGap);
+for (const t of ["resize", "orientationchange"]) window.addEventListener(t, turned);
+for (const t of ["pageshow", "focus"]) window.addEventListener(t, syncGap);
 document.addEventListener("visibilitychange", syncGap);
 
 loadBible();

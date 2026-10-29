@@ -5,7 +5,7 @@ const UI = {
   begin: ["Begin", "தொடங்கு"],
   today: ["Today", "இன்று"],
   bible: ["Bible", "வேதாகமம்"],
-  ofBible: ["of the Bible", "வேதாகமத்தில்"],
+  ofBible: ["completed", "நிறைவுற்றது"],
   booksRead: ["books read", "வாசித்த நூல்கள்"],
   streak: ["day streak", "தொடர் நாட்கள்"],
   catchUp: ["Catch-up", "விடுபட்டவை"],
