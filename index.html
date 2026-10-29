@@ -18,10 +18,13 @@
       html { color-scheme: dark; -webkit-text-size-adjust: 100%; }
       /* the page itself never scrolls (every screen scrolls inside its own area), so the system has no page scroll to put edge effects on */
       html, body { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+      /* black strip over the status-bar boundary, above everything: nothing of the page may show a line there */
+      #top-cover { position: fixed; top: 0; left: 0; right: 0; height: calc(env(safe-area-inset-top, 0px) + 2px); background: #000; z-index: 2147483647; pointer-events: none; }
       * { touch-action: pan-x pan-y; }  /* scrolling and swiping only: no pinch or double-tap zoom */
     </style>
   </head>
   <body>
+    <div id="top-cover"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
