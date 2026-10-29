@@ -419,11 +419,47 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   const { hits, total } = useMemo(() => (s.length < 2 || target ? { hits: [], total: 0 } : searchBible(s, lang, limit)), [s, !!target, lang, ver, limit]);
   const mark = tx => tx.split(new RegExp("(" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, "[\"\u201c\u201d]") + ")", "i")).map((p, i) => i % 2 ? <mark key={i} style={{ background: accentA(.35), color: C.text, borderRadius: 3 }}>{p}</mark> : p);
   const lines = (x, hl) => [lang !== "ta" && x.en ? ["en", x.en] : null, lang !== "en" && x.ta ? ["ta", x.ta] : null].filter(Boolean).map(([l, tx]) => <div key={l} lang={l} style={{ fontFamily: l === "ta" ? taFont : serif, fontSize: l === "ta" ? 15 : 16, lineHeight: 1.55, marginTop: l === "ta" && lang === "both" ? 4 : 0, color: l === "ta" && lang === "both" ? TAMIL_DIM : C.text }}>{hl ? mark(tx) : tx}</div>);
+  // Long press on a book (0.4 s without moving): its chapter numbers appear under your finger; slide to one and lift to open it.
+  // Near the top or bottom edge the numbers scroll. A quick tap still just opens the chapter page; lifting over no number stays on it.
+  const lp = useRef({ t: 0, on: false, b: null, x: 0, y: 0, x0: 0, y0: 0, raf: 0, quiet: 0 }), goRef = useRef(go), bodyRef = useRef(null);
+  goRef.current = go;
+  const [hot, setHot] = useState(0), [fast, setFast] = useState(false);
+  useEffect(() => { if (!book) setFast(false); }, [book]);
+  useEffect(() => {
+    const s = lp.current, chAt = (x, y) => { const e = document.elementFromPoint(x, y), c = e && e.closest ? e.closest("[data-chn]") : null; return c ? +c.getAttribute("data-chn") : 0; };
+    s.chAt = chAt;
+    const edge = () => {
+      s.raf = 0; const el = bodyRef.current; if (!s.on || !el) return;
+      const r = el.getBoundingClientRect(); let d = 0;
+      if (s.y < r.top + 60) d = -(2 + (r.top + 60 - s.y) / 8); else if (s.y > r.bottom - 60) d = 2 + (s.y - (r.bottom - 60)) / 8;
+      if (d) { el.scrollTop += d; setHot(chAt(s.x, s.y)); s.raf = requestAnimationFrame(edge); }
+    };
+    const move = (x, y, e) => {
+      if (!s.b) return;
+      if (!s.on) { if (Math.hypot(x - s.x0, y - s.y0) > 10) { clearTimeout(s.t); s.b = null; } return; }  // moved before 0.4 s: it is a scroll, not a long press
+      s.x = x; s.y = y; if (e.cancelable) e.preventDefault();
+      setHot(chAt(x, y)); if (!s.raf) s.raf = requestAnimationFrame(edge);
+    };
+    const end = () => {
+      if (!s.b) return;
+      const was = s.on, n = was ? chAt(s.x, s.y) : 0, b = s.b;
+      clearTimeout(s.t); cancelAnimationFrame(s.raf); s.raf = 0; s.on = false; s.b = null; setHot(0);
+      if (was) { s.quiet = Date.now(); if (n) goRef.current({ ch: [[b, n]] }); }
+    };
+    const tm = e => move(e.touches[0].clientX, e.touches[0].clientY, e), mm = e => move(e.clientX, e.clientY, e);
+    window.addEventListener("touchmove", tm, { passive: false }); window.addEventListener("touchend", end); window.addEventListener("touchcancel", end);
+    window.addEventListener("mousemove", mm); window.addEventListener("mouseup", end);
+    return () => { clearTimeout(s.t); cancelAnimationFrame(s.raf); window.removeEventListener("touchmove", tm); window.removeEventListener("touchend", end); window.removeEventListener("touchcancel", end); window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", end); };
+  }, []);
+  const lpStart = (b, x, y) => {
+    const s = lp.current; clearTimeout(s.t); s.b = b; s.on = false; s.x = s.x0 = x; s.y = s.y0 = y;
+    s.t = setTimeout(() => { s.on = true; setFast(true); setBook(b); setHot(s.chAt ? s.chAt(s.x, s.y) : 0); }, 400);
+  };
   const group = (title, list, off) => (
     <div style={{ marginBottom: 28 }}>
       <div style={{ color: C.accent, fontSize: lang === "ta" ? 17 : 13, fontWeight: 600, letterSpacing: lang === "ta" ? 0 : 0.6, textTransform: "uppercase", margin: "0 8px 8px" }}>{title}</div>
       <div style={{ borderBottom: `1px solid ${SEPARATOR}` }}>
-        {list.map(([b, cnt], i) => <div key={b} onClick={() => (cnt === 1 ? go({ ch: [[b, 1]] }) : setBook(b))} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 52, boxSizing: "border-box", padding: "0 8px", borderTop: `1px solid ${SEPARATOR}`, cursor: "pointer", fontSize: 17 }}><span>{disp(b, lang)}</span><span style={{ color: C.sub, display: "flex", alignItems: "center", gap: 10 }}>{lang === "both" && <span style={{ fontSize: 15 }}>{TA_NAMES[off + i]}</span>}<Chev /></span></div>)}
+        {list.map(([b, cnt], i) => <div key={b} onClick={() => { if (Date.now() - lp.current.quiet < 600) return; if (cnt === 1) go({ ch: [[b, 1]] }); else setBook(b); }} onContextMenu={e => e.preventDefault()} onTouchStart={cnt > 1 ? e => lpStart(b, e.touches[0].clientX, e.touches[0].clientY) : undefined} onMouseDown={cnt > 1 ? e => { if (e.button === 0) lpStart(b, e.clientX, e.clientY); } : undefined} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 52, boxSizing: "border-box", padding: "0 8px", borderTop: `1px solid ${SEPARATOR}`, cursor: "pointer", fontSize: 17 }}><span>{disp(b, lang)}</span><span style={{ color: C.sub, display: "flex", alignItems: "center", gap: 10 }}>{lang === "both" && <span style={{ fontSize: 15 }}>{TA_NAMES[off + i]}</span>}<Chev /></span></div>)}
       </div>
     </div>
   );
@@ -460,7 +496,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
   );
   const bookBody = book && (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${land ? 8 : 5}, 1fr)`, gap: 10 }}>
-      {Array.from({ length: BOOKS.find(([b]) => b === book)[1] }, (_, i) => <button key={i} onClick={() => go({ ch: [[book, i + 1]] })} style={{ aspectRatio: "1", borderRadius: RAD, border: "none", background: C.card, color: C.text, fontSize: 17, fontFamily: sans, cursor: "pointer" }}>{i + 1}</button>)}
+      {Array.from({ length: BOOKS.find(([b]) => b === book)[1] }, (_, i) => <button key={i} data-chn={i + 1} onClick={() => go({ ch: [[book, i + 1]] })} style={{ aspectRatio: "1", borderRadius: RAD, border: "none", background: hot === i + 1 ? accentA(.38) : C.card, color: C.text, fontSize: 17, fontFamily: sans, cursor: "pointer" }}>{i + 1}</button>)}
     </div>
   );
 
@@ -528,9 +564,9 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     </div>
     )}
     {(showFavs || book) && (
-      <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: `0 0 calc(${NAV} - ${GAP}) 0`, zIndex: 4, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y", animation: "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
+      <div key={showFavs ? "favs" : "book"} ref={rootRef} style={{ position: "fixed", inset: `0 0 calc(${NAV} - ${GAP}) 0`, zIndex: 4, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden", touchAction: "pan-y", animation: fast ? "none" : "wInR .28s cubic-bezier(.2,.8,.2,1)" }}>
         <div style={{ flex: "0 0 auto", maxWidth: mw, width: "100%", margin: "0 auto", boxSizing: "border-box", padding: `calc(28px + ${TOP}) max(24px, env(safe-area-inset-right, 0px)) 0 max(24px, env(safe-area-inset-left, 0px))` }}>{showFavs ? favsHead : bookHead}</div>
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
+        <div ref={bodyRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
           <div style={{ maxWidth: mw, margin: "0 auto", padding: "0 max(24px, env(safe-area-inset-right, 0px)) 32px max(24px, env(safe-area-inset-left, 0px))" }}>{showFavs ? favsBody : bookBody}</div>
         </div>
       </div>
