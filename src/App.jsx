@@ -225,6 +225,18 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
   act.current = { favs, hls, toggleFav, toggleHl, lang };
   const setM = m => { mref.current = m; setMenu(m); };
   useSwipeBack(ref, close, true);
+  // a new text size changes every verse's height; the verse at the top of the screen is put back where it was
+  const spot = useRef(null);
+  const resize = v => {
+    const el = sc.current;
+    if (el) { const top = el.getBoundingClientRect().top, x = [...el.querySelectorAll("[data-vk]")].find(q => q.getBoundingClientRect().bottom > top + 1); spot.current = x ? { key: x.getAttribute("data-vk"), top: x.getBoundingClientRect().top } : null; }
+    setSize(v);
+  };
+  useLayoutEffect(() => {
+    const a = spot.current; spot.current = null; const scr = sc.current; if (!a || !scr) return;
+    const el = scr.querySelector(`[data-vk="${a.key}"]`);
+    if (el) { scr.scrollTop += el.getBoundingClientRect().top - a.top; scr.dispatchEvent(new Event("scroll")); }  // the scroll event refreshes the title under the bar
+  }, [size]);
   const place = () => {
     const scr = sc.current; if (!scr) return;
     const hl = scr.querySelector("[data-hl]");
@@ -391,9 +403,9 @@ function Reader({ item, size, setSize, close, go, advance, last, lang, setLang, 
             <div style={{ fontFamily: sans, fontSize: 17, fontWeight: 600, color: C.accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(() => { const [tb, tn] = (cur && list.find(([b, n]) => b + " " + n === cur)) || item.ch[0]; return `${rn(tb, lang)} ${tn}`; })()}</div>
           </div>
           <div style={{ display: "flex", background: C.card, borderRadius: RAD, overflow: "hidden", flexShrink: 0 }}>
-            <button onClick={() => setSize(Math.max(10, size - 2))} aria-label={t(lang, "aSmall")} style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>−</button>
+            <button onClick={() => resize(Math.max(10, size - 2))} aria-label={t(lang, "aSmall")} style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>−</button>
             <button onClick={() => setLang(LANGS[(LANGS.indexOf(lang) + 1) % 3])} aria-label={t(lang, "aLang")} style={{ ...sec, width: 52, borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}` }}><LangLabel l={lang} /></button>
-            <button onClick={() => setSize(Math.min(28, size + 2))} aria-label={t(lang, "aLarge")} style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>+</button>
+            <button onClick={() => resize(Math.min(28, size + 2))} aria-label={t(lang, "aLarge")} style={{ ...sec, width: 42, fontSize: 22, fontWeight: 300 }}>+</button>
           </div>
         </div>
       </div>
@@ -520,7 +532,7 @@ function BibleTab({ go, lang, setLang, favs, toggleFav, active }) {
     </div>
   );
   const favBtn = (
-    <button onClick={() => setShowFavs(true)} aria-label={t(lang, "favs")} style={{ height: 36, flexShrink: 0, boxSizing: "border-box", background: "none", border: `0.5px solid ${accentA(.7)}`, borderRadius: RAD, padding: "0 12px", display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: C.text, fontSize: 14, fontFamily: sans }}>
+    <button onClick={() => setShowFavs(true)} aria-label={t(lang, "favs")} style={{ height: 36, flexShrink: 0, boxSizing: "border-box", background: accentA(.22), border: "none", borderRadius: RAD, padding: "0 12px", display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: C.text, fontSize: 14, fontFamily: sans }}>
       <span style={{ color: C.accent, display: "flex" }}>{Ico.heartM()}</span><span>{favs.length}</span>
     </button>
   );
